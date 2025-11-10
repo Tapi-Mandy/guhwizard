@@ -16,7 +16,4 @@ It builds and installs directly from [Tapi-Mandy/guhwm](https://github.com/Tapi-
 ### Use this command to run the installer
 
 ```bash
-git clone https://github.com/Tapi-Mandy/guhwizard
-cd guhwizard
-chmod +x guhwizard.sh
-./guhwizard.sh
+git clone https://github.com/Tapi-Mandy/guhwizard && cd guhwizard && chmod +x guhwizard.sh && ./guhwizard.sh
