@@ -1,6 +1,7 @@
 # guhwizard
 
 **guhwizard** is an advanced installer that automates the setup of the **Guh Window Manager** environment — a clean, modular desktop.
+
 It builds and installs directly from [Tapi-Mandy/guhwm](https://github.com/Tapi-Mandy/guhwm), applies fonts, scripts, and configs, and more.
 
 ---
