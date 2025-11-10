@@ -1,19 +1,20 @@
 # guhwizard
 
-**guhwizard** is an advanced installer that automates the setup of the **Guh Window Manager** environment — a clean, modular desktop.
+### guhwizard is an advanced Linux installer and utility featuring the Guh Window Manager environment — a clean and modular desktop.
 
-It builds and installs directly from [Tapi-Mandy/guhwm](https://github.com/Tapi-Mandy/guhwm), applies fonts, scripts, and configs, and more.
+#### It builds and installs directly from [Tapi-Mandy/guhwm](https://github.com/Tapi-Mandy/guhwm), applies fonts, scripts, and configs, and more.
 
 ---
 
-## 💡 Requirements
+## 🔧 Requirements
 
-- Arch Linux or any linux distribution (e.g. Void, NixOS, Debian)
-- Internet connection for cloning repositories
+- 🐧 Any Linux distribution (e.g. Arch, Void, NixOS, Debian)
+- 🌐 Internet connection for cloning repositories
 
-## 🚀 Installation
+## ⚙️ Installation
 
 ### Use this command to run the installer
 
 ```bash
 git clone https://github.com/Tapi-Mandy/guhwizard && cd guhwizard && chmod +x guhwizard.sh && ./guhwizard.sh
+```
