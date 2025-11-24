@@ -3,7 +3,7 @@
 ---
 ## 🛠️ Requirements
 
-- 🐧 Arch Linux distribution (e.g. Arch, Artix,)
+- 🐧 Arch Linux distribution (e.g. Arch, Artix)
 - ☁️ Internet connection for cloning repositories
 - 🌱 Having git installed
 
