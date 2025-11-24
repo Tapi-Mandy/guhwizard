@@ -1,6 +1,4 @@
-<div align="center">
-<img width="658" height="160" alt="guhwizard" src="https://github.com/user-attachments/assets/72e14e15-4662-4102-a855-290b7b6172c6"/>
-</div>
+<div align="center"> <img width="658" height="160" alt="guhwizard" src="https://github.com/user-attachments/assets/72e14e15-4662-4102-a855-290b7b6172c6"/></div>
 
 ---
 ## 🛠️ Requirements
