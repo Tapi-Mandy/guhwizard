@@ -8,9 +8,6 @@
 - 🌱 Having git installed
 
 ## 📦 Installation
-
-### Use this command to run the installer
-
 ```
 git clone https://github.com/Tapi-Mandy/guhwizard && cd guhwizard && chmod +x guhwizard.sh && ./guhwizard.sh
 ```
