@@ -4,34 +4,36 @@
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Bash Side)
-MAGENTA='\033[1;35m'
-ROSE='\033[0;31m' 
+# Colors (Bash Side - Vanilla/Brown Theme)
+VANILLA='\033[1;33m' # Light Yellow/Bold
+COFFEE='\033[0;33m'  # Brownish
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${MAGENTA}[*] Initializing guhwizard...${NC}"
+echo -e "${VANILLA}[*] Initializing guhwizard...${NC}"
 
 # 1. Check for Sudo
 if [ "$EUID" -eq 0 ]; then
-  echo -e "${ROSE}[!] Please run this script as a standard user (not root).${NC}"
+  echo -e "${RED}[!] Please run this script as a standard user (not root).${NC}"
   exit 1
 fi
 
 # 2. Dependencies
-echo -e "${MAGENTA}[*] Installing system dependencies...${NC}"
+echo -e "${COFFEE}[*] Installing system dependencies...${NC}"
+# We quiet this part to get to the TUI faster, but show errors if they happen
 sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
 
 # 3. TUI Libraries
-echo -e "${MAGENTA}[*] Setting up Python TUI libraries...${NC}"
-pip install rich questionary --break-system-packages
+echo -e "${COFFEE}[*] Setting up Python TUI libraries...${NC}"
+pip install rich questionary --break-system-packages --no-warn-script-location
 
 if [ $? -ne 0 ]; then
-    echo -e "${ROSE}[!] Failed to install Python libraries. Exiting.${NC}"
+    echo -e "${RED}[!] Failed to install Python libraries. Exiting.${NC}"
     exit 1
 fi
 
 # 4. Python Installer Generation
-echo -e "${MAGENTA}[*] Launching guhwizard...${NC}"
+echo -e "${VANILLA}[*] Launching guhwizard...${NC}"
 
 cat << 'EOF' > installer.py
 import os
@@ -39,7 +41,6 @@ import sys
 import subprocess
 import shutil
 import time
-import glob
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -52,11 +53,11 @@ import questionary
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
 console = Console()
 
-# --- Colors & Styles ---
-C_PRIMARY = "bold magenta"     
-C_ACCENT = "#ff5faf"           
-C_DARK = "#5f005f"             
-C_DIM = "dim #d75f87"          
+# --- Colors & Styles (Vanilla / Dark Vanilla Theme) ---
+C_PRIMARY = "bold #E3C58E"     # Vanilla Gold
+C_ACCENT = "#FFF8DC"           # Cornsilk / Cream
+C_DARK = "#4E342E"             # Dark Coffee (Borders)
+C_DIM = "dim #D7CCC8"          # Soft Beige (Subtitles)
 
 # --- Package Definitions ---
 class Pkg:
@@ -69,13 +70,18 @@ class Pkg:
         self.service_name = service_name if service_name else self.pkg_name
 
 # --- Utilities ---
-def run_cmd(cmd, shell=False, capture=False):
+def run_cmd(cmd, shell=False, show_output=False):
+    """
+    Executes a command.
+    If show_output is True, stdout/stderr are shown to the user (useful for pacman).
+    If show_output is False, they are suppressed.
+    """
     try:
-        if capture:
-            return subprocess.check_output(cmd, shell=shell).decode('utf-8').strip()
+        if show_output:
+            subprocess.check_call(cmd, shell=shell)
         else:
             subprocess.check_call(cmd, shell=shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
+        return True
     except subprocess.CalledProcessError:
         return False
 
@@ -100,19 +106,40 @@ def print_header():
 def center_print(text_obj):
     console.print(Align.center(text_obj))
 
+def install_config_file(src_path, dest_dir, file_name):
+    """Safely installs a config file with overwrite prompt."""
+    if not os.path.exists(src_path):
+        return
+
+    full_dest_dir = os.path.expanduser(dest_dir)
+    full_dest_path = os.path.join(full_dest_dir, file_name)
+
+    # Ensure directory exists
+    os.makedirs(full_dest_dir, exist_ok=True)
+
+    if os.path.exists(full_dest_path):
+        # Ask user
+        if questionary.confirm(f"Config file '{file_name}' already exists in {dest_dir}. Overwrite?").ask():
+            shutil.copy(src_path, full_dest_path)
+            console.print(Align.center(f"[dim]Overwrote {file_name}[/dim]"))
+        else:
+            console.print(Align.center(f"[dim]Skipped {file_name}[/dim]"))
+    else:
+        shutil.copy(src_path, full_dest_path)
+        console.print(Align.center(f"[dim]Installed {file_name}[/dim]"))
+
 # --- Core Logic ---
 
-def install_pacman_packages(packages, description="Installing base packages"):
+def install_pacman_packages(packages, description="Installing packages"):
     if not packages: return
-    with Progress(SpinnerColumn(), TextColumn(f"[{C_ACCENT}]{{task.description}}"), transient=True) as progress:
-        task = progress.add_task(description, total=None)
-        cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
-        run_cmd(cmd)
+    # We show output directly for base packages so the user sees progress
+    cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
+    run_cmd(cmd, show_output=True)
 
 def install_aur_package(package_name, helper):
     if not helper: return False
     cmd = [helper, "-S", "--noconfirm", "--needed", package_name]
-    return run_cmd(cmd)
+    return run_cmd(cmd, show_output=True) # Show output for AUR too
 
 def setup_aur_helper(choice):
     if choice == "None": return None
@@ -120,9 +147,9 @@ def setup_aur_helper(choice):
 
     console.print(Align.center(f"[yellow]Installing {choice}...[/yellow]"))
     build_dir = os.path.expanduser(f"~/{choice.lower()}_build_temp")
-    repo = f"https://aur.archlinux.org/{choice.lower()}.git"
+    repo = f"https://aur.archlinux.org/{choice.lower()}-bin.git"
     try:
-        run_cmd(["git", "clone", repo, build_dir])
+        run_cmd(["git", "clone", repo, build_dir], show_output=True)
         os.chdir(build_dir)
         os.system("makepkg -si --noconfirm")
         os.chdir(os.path.expanduser("~"))
@@ -131,77 +158,6 @@ def setup_aur_helper(choice):
     except Exception as e:
         console.print(Align.center(f"[red]Failed to install {choice}: {e}[/red]"))
         return None
-
-def set_keyboard_layout():
-    print_header()
-    center_print(Text("Configure Keyboard Layout", style=C_ACCENT))
-    
-    # Extensive List
-    layout_map = {
-        "US (United States)": "us",
-        "GB (United Kingdom)": "gb",
-        "AR (Argentina)": "ar",
-        "AT (Austria)": "at",
-        "AU (Australia)": "au",
-        "BE (Belgium)": "be",
-        "BR (Brazil)": "br",
-        "CA (Canada)": "ca",
-        "CH (Switzerland)": "ch",
-        "CZ (Czechia)": "cz",
-        "DE (Germany)": "de",
-        "DK (Denmark)": "dk",
-        "ES (Spain)": "es",
-        "FI (Finland)": "fi",
-        "FR (France)": "fr",
-        "GR (Greece)": "gr",
-        "HU (Hungary)": "hu",
-        "IE (Ireland)": "ie",
-        "IL (Israel)": "il",
-        "IN (India)": "in",
-        "IT (Italy)": "it",
-        "JP (Japan)": "jp",
-        "KR (Korea)": "kr",
-        "LATAM (Latin America)": "latam",
-        "NL (Netherlands)": "nl",
-        "NO (Norway)": "no",
-        "PL (Poland)": "pl",
-        "PT (Portugal)": "pt",
-        "RO (Romania)": "ro",
-        "RU (Russia)": "ru",
-        "SE (Sweden)": "se",
-        "TR (Turkey)": "tr",
-        "UA (Ukraine)": "ua"
-    }
-    
-    # Instruction is set to empty space to remove default help text
-    choices = questionary.checkbox(
-        "Select your keyboard layout(s):",
-        choices=list(layout_map.keys()),
-        instruction=" " 
-    ).ask()
-    
-    if not choices: return
-
-    final_codes = [layout_map[c] for c in choices]
-
-    if final_codes:
-        layout_str = ",".join(final_codes)
-        options = ""
-        
-        if len(final_codes) > 1:
-            console.print(Align.center(f"[dim]Multiple layouts selected ({layout_str}). Toggle enabled (Ctrl+Space).[/dim]"))
-            options = "grp:ctrl_space_toggle"
-        else:
-            console.print(Align.center(f"[dim]Setting layout to {layout_str}...[/dim]"))
-
-        # Apply immediately
-        opt_flag = f"-option '{options}'" if options else "-option ''"
-        os.system(f"setxkbmap -layout '{layout_str}' {opt_flag}")
-
-        # Apply persistently
-        cmd_persist = f"sudo localectl set-x11-keymap \"{layout_str}\" \"\" \"\" \"{options}\""
-        os.system(cmd_persist)
-        time.sleep(1)
 
 # --- Categories ---
 
@@ -212,26 +168,26 @@ base_pkgs = [
 ]
 
 browsers = [
-    Pkg("Brave", "Privacy-focused browser", "brave-bin", is_aur=True),
+    Pkg("Brave", "Privacy-focused browser blocking trackers", "brave-bin", is_aur=True),
     Pkg("Firefox", "Fast, Private & Safe Web Browser", "firefox"),
-    Pkg("Librewolf", "Private Fork of Firefox", "librewolf-bin", is_aur=True),
+    Pkg("Librewolf", "Fork of Firefox focused on privacy", "librewolf-bin", is_aur=True),
     Pkg("Lynx", "Text-based web browser", "lynx"),
 ]
 
 comm_apps = [
     Pkg("Discord", "All-in-one voice and text chat", "discord"),
     Pkg("Telegram", "Official Telegram Desktop client", "telegram-desktop"),
-    Pkg("Vesktop", "Custom Discord client", "vesktop-bin", is_aur=True),
-    Pkg("Webcord", "Web-based Discord client", "webcord-bin", is_aur=True),
+    Pkg("Vesktop", "The cutest Discord client", "vesktop-bin", is_aur=True),
+    Pkg("Webcord", "Discord client that uses the web version", "webcord-bin", is_aur=True),
 ]
 
 dev_tools = [
-    Pkg("Emacs", "Extensible text editor", "emacs"),
-    Pkg("Nano", "Simple terminal editor", "nano"),
-    Pkg("Neovim", "Fork of Vim", "neovim"),
-    Pkg("Sublime", "Sophisticated text editor", "sublime-text-4", is_aur=True),
+    Pkg("Emacs", "Extensible, customizable text editor", "emacs"),
+    Pkg("Nano", "Simple terminal text editor", "nano"),
+    Pkg("Neovim", "Fork of Vim aiming to improve user experience", "neovim"),
+    Pkg("Sublime", "Sophisticated text editor for code", "sublime-text-4", is_aur=True),
     Pkg("Vim", "Highly configurable text editor", "vim"),
-    Pkg("VSCodium", "Free binary of VSCode", "vscodium-bin", is_aur=True),
+    Pkg("VSCodium", "Free/Libre Open Source binary of VSCode", "vscodium-bin", is_aur=True),
 ]
 
 wall_apps = [
@@ -240,18 +196,18 @@ wall_apps = [
 
 misc_apps = [
     Pkg("Htop", "Interactive process viewer", "htop"),
-    Pkg("Krita", "Digital painting studio", "krita"),
+    Pkg("Krita", "A full-featured free digital painting studio", "krita"),
     Pkg("Mpv", "Command line video player", "mpv"),
-    Pkg("Redshift", "Adjusts screen color", "redshift"),
-    Pkg("Uwufetch", "Cute system info fetcher", "uwufetch"),
-    Pkg("Yazi", "Terminal file manager", "yazi"),
+    Pkg("Redshift", "Adjusts screen color temperature", "redshift"),
+    Pkg("Uwufetch", "Cute system information fetcher", "uwufetch"),
+    Pkg("Yazi", "Blazing fast terminal file manager", "yazi"),
 ]
 
 shells = [
-    Pkg("Bash", "GNU Bourne Again shell", "bash"),
-    Pkg("Ksh", "KornShell", "ksh"),
-    Pkg("Oh My Zsh", "Framework for Zsh", "zsh"), 
-    Pkg("Zsh", "Advanced shell", "zsh"),
+    Pkg("Bash", "The GNU Bourne Again shell", "bash"),
+    Pkg("Ksh", "KornShell, a classic Unix shell", "ksh"),
+    Pkg("Oh My Zsh", "Community-driven framework for Zsh", "zsh"), 
+    Pkg("Zsh", "Shell designed for advanced use", "zsh"),
 ]
 
 dms = [
@@ -266,15 +222,17 @@ dms = [
 def main():
     print_header()
 
-    # 0. Keyboard Layout
-    set_keyboard_layout()
-
     # 1. Install Base
     print_header()
     center_print(Text("Base Packages", style=C_PRIMARY))
-    install_pacman_packages(base_pkgs, "Installing Base Packages...")
+    console.print(Align.center("[dim]Installing base packages via pacman (output shown below)...[/dim]"))
+    print() 
+    
+    install_pacman_packages(base_pkgs)
+    
+    print()
     center_print(Text("✔ Base packages installed.", style="green"))
-    time.sleep(1)
+    time.sleep(2)
 
     # 2. Welcome
     print_header()
@@ -288,7 +246,7 @@ def main():
     # 3. AUR Helper
     print_header()
     center_print(Text("AUR Helper Selection", style=C_PRIMARY))
-    center_print(Text("Required for Waypaper, Vesktop, etc.", style="dim"))
+    center_print(Text("Required for Brave, Vesktop, Waypaper, etc.", style="dim"))
     
     aur_choice = questionary.select(
         "Choose an AUR helper to install/use:",
@@ -345,13 +303,12 @@ def main():
             for name in selected_names:
                 pkg = next((p for p in available_pkgs if p.name == name), None)
                 if pkg:
-                    msg = f"Installing [{C_ACCENT}]{pkg.name}[/{C_ACCENT}]"
                     if pkg.is_aur and aur_helper:
-                        console.print(Align.center(f"{msg} (AUR)..."))
+                        console.print(Align.center(f"Installing {pkg.name} (AUR)..."))
                         install_aur_package(pkg.pkg_name, aur_helper)
                     else:
-                        console.print(Align.center(f"{msg} (Pacman)..."))
-                        install_pacman_packages([pkg.pkg_name], f"Installing {pkg.name}")
+                        console.print(Align.center(f"Installing {pkg.name} (Pacman)..."))
+                        install_pacman_packages([pkg.pkg_name])
 
     # 5. Shell Selection
     print_header()
@@ -369,7 +326,7 @@ def main():
 
     if shell_choice:
         sel_shell = next(s for s in shells if s.name == shell_choice)
-        install_pacman_packages([sel_shell.pkg_name], f"Installing {sel_shell.name}")
+        install_pacman_packages([sel_shell.pkg_name])
 
         if shell_choice == "Oh My Zsh":
             console.print(Align.center("Installing Oh My Zsh..."))
@@ -399,7 +356,7 @@ def main():
 
     if dm_choice != "None":
         sel_dm = next(d for d in dms if d.name == dm_choice)
-        install_pacman_packages([sel_dm.pkg_name], f"Installing {sel_dm.name}")
+        install_pacman_packages([sel_dm.pkg_name])
         
         if sel_dm.name == "LightDM":
             install_pacman_packages(["lightdm-gtk-greeter"])
@@ -415,19 +372,51 @@ def main():
     if os.path.exists("guhwm"):
         shutil.rmtree("guhwm")
     
-    run_cmd(["git", "clone", REPO_URL])
+    run_cmd(["git", "clone", REPO_URL], show_output=True)
     
     if os.path.exists("guhwm"):
-        console.print(Align.center("Installing Wallpapers..."))
-        # 1. Create wallpaper dir
-        os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
         
-        # 2. Copy contents of Wallpapers folder
-        # We assume files are inside guhwm/Wallpapers/
+        # --- Config Files Check ---
+        console.print(Align.center("Checking configuration files..."))
+        
+        # 1. Picom
+        install_config_file("guhwm/picom.conf", "~/.config/picom", "picom.conf")
+        
+        # 2. Rofi
+        install_config_file("guhwm/config.rasi", "~/.config/rofi", "config.rasi")
+        
+        # --- Wallpapers ---
+        console.print(Align.center("Installing Wallpapers..."))
+        os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
         if os.path.exists("guhwm/Wallpapers"):
             os.system("sudo cp -r guhwm/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
-        
-        # 3. Compiling DWM and SLSTATUS Only
+
+        # --- Mod Key Selection ---
+        print_header()
+        center_print(Text("Modifier Key Selection", style=C_PRIMARY))
+        mod_choice = questionary.select(
+            "Which key would you like to use as the 'Mod' key?",
+            choices=[
+                "Alt (Default / Mod1)", 
+                "Windows/Super (Recommended / Mod4)"
+            ]
+        ).ask()
+
+        if "Windows" in mod_choice:
+            console.print(Align.center("[yellow]Applying Windows/Super key to config...[/yellow]"))
+            config_path = "guhwm/dwm/config.def.h"
+            if os.path.exists(config_path):
+                # Read
+                with open(config_path, 'r') as f:
+                    content = f.read()
+                # Replace
+                content = content.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
+                # Write
+                with open(config_path, 'w') as f:
+                    f.write(content)
+
+        # --- Compilation ---
+        console.print(Align.center(Text("Compiling guhwm...", style=C_PRIMARY)))
         targets = ["dwm", "slstatus"]
         for target in targets:
             t_path = os.path.join("guhwm", target)
@@ -435,16 +424,13 @@ def main():
                 console.print(Align.center(f"Compiling {target}..."))
                 os.chdir(t_path)
                 os.system("sudo make clean install")
-                os.chdir("../..") # Return to root
+                os.chdir("../..")
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # 4. Create Session Launcher Script (Fix for Display Managers)
-        # This script ensures picom, feh, and slstatus start before dwm
+        # --- Session Script (Fix for DMs) ---
         console.print(Align.center("Creating session startup script..."))
         
-        # Try to find the specific midnight-rose file to set as default
-        # We wildcard extensions just in case
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
         session_script = f"""#!/bin/sh
@@ -453,14 +439,15 @@ def main():
 # 1. Set Wallpaper (Default)
 feh --bg-fill {wall_path} &
 
-# 2. Start Compositor (Picom) - Essential for transparency/animations
+# 2. Start Compositor (Picom)
 picom -b &
 
 # 3. Start Status Bar
 slstatus &
 
 # 4. Start Window Manager (Must be last with exec)
-exec dwm
+# Using absolute path to ensure DM finds it
+exec /usr/local/bin/dwm
 """
         with open("guhwm-session", "w") as f:
             f.write(session_script)
@@ -468,7 +455,7 @@ exec dwm
         os.system("sudo mv guhwm-session /usr/local/bin/guhwm-session")
         os.system("sudo chmod +x /usr/local/bin/guhwm-session")
 
-        # 5. Create .desktop file pointing to the wrapper script
+        # Create .desktop file
         desktop_entry = """[Desktop Entry]
 Encoding=UTF-8
 Name=guhwm
@@ -507,7 +494,7 @@ EOF
 if [ -f "installer.py" ]; then
     python3 installer.py
 else
-    echo -e "${ROSE}[!] Error: installer.py was not created.${NC}"
+    echo -e "${RED}[!] Error: installer.py was not created.${NC}"
 fi
 
 # 6. Cleanup
