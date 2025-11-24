@@ -1,6 +1,8 @@
-# guhwizard
+<div align="center">
+<img width="658" height="160" alt="guhwizard" src="https://github.com/user-attachments/assets/72e14e15-4662-4102-a855-290b7b6172c6"/>
+  <h3>Advanced TUI installer for the Guh Window Manager — a clean and modular desktop.</h2>
+</div>
 
-### Advanced TUI installer for the Guh Window Manager — a clean and modular desktop.
 ---
 ## 🛠️ Requirements
 
