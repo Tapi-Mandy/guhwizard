@@ -100,7 +100,7 @@ def print_header():
 
 def print_section(title):
     console.print()
-    console.rule(f"[{C_PRIMARY}]{title}[/]")
+    console.rule(f"[{C_PRIMARY}]{title}[/]", style=C_DARK)
     console.print()
 
 def install_config_file(src_path, dest_dir, file_name):
