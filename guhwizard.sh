@@ -3,7 +3,7 @@
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Midnight Rose)
+# Colors (Midnight Rose Theme)
 MAGENTA='\033[1;35m'
 ROSE='\033[0;31m' 
 NC='\033[0m' # No Color
@@ -132,7 +132,6 @@ def install_config_file(src_path, dest_dir, file_name):
 def install_pacman_packages(packages, description="Installing packages..."):
     if not packages: return
     
-    # ANIMATION: Use Rich Spinner for Pacman operations
     with Progress(
         SpinnerColumn(style=C_ACCENT),
         TextColumn("[bold white]{task.description}"),
@@ -140,12 +139,10 @@ def install_pacman_packages(packages, description="Installing packages..."):
     ) as progress:
         progress.add_task(description, total=None)
         cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
-        # Run silently to keep the animation clean
         run_cmd(cmd, show_output=False)
 
 def install_aur_package(package_name, helper):
     if not helper: return False
-    # AUR helpers usually need interaction, so we show output
     cmd = [helper, "-S", "--noconfirm", "--needed", package_name]
     return run_cmd(cmd, show_output=True)
 
@@ -161,7 +158,6 @@ def setup_aur_helper(choice):
     if os.path.exists(build_dir): shutil.rmtree(build_dir)
 
     try:
-        # Show output here as makepkg can be verbose/interactive
         run_cmd(["git", "clone", repo, build_dir], show_output=True)
         os.chdir(build_dir)
         os.system("makepkg -si --noconfirm")
@@ -178,7 +174,7 @@ base_pkgs = [
     # Essential X11 components
     "xorg", "xorg-xinit", 
     
-    # Compilation Libraries
+    # Compilation Libraries (CRITICAL for DWM)
     "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
     
     # Core
@@ -243,10 +239,8 @@ def main():
     # 1. Install Base
     print_section("Base System")
     
-    # New Spinner Animation
     install_pacman_packages(base_pkgs, "Installing base packages...")
     
-    # Refresh Fonts (Silent)
     run_cmd(["fc-cache", "-fv"], show_output=False)
     
     console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
@@ -304,7 +298,6 @@ def main():
 
         if selected_names and "None" not in selected_names:
             console.print()
-            # Separate lists to batch install Pacman packages nicely
             pacman_queue = []
             
             for name in selected_names:
@@ -316,7 +309,6 @@ def main():
                     else:
                         pacman_queue.append(pkg.pkg_name)
             
-            # Install all selected pacman packages for this category in one go with animation
             if pacman_queue:
                 install_pacman_packages(pacman_queue, f"Installing {len(pacman_queue)} packages...")
             
@@ -324,7 +316,7 @@ def main():
 
     # 5. Shell Selection
     print_header()
-    print_section("Choose a shell")
+    print_section("Shell Selection")
     
     s_table = Table(box=box.ROUNDED, border_style=C_DARK, header_style=C_PRIMARY)
     s_table.add_column("Shell", style=C_ACCENT)
@@ -361,7 +353,6 @@ def main():
              console.print(Align.center(f"[{C_ERROR}]Error: Could not remove {REPO_NAME} folder. Manual intervention required.[/]"))
              sys.exit(1)
     
-    # Cloning doesn't get a spinner because it can prompt for credentials or show progress
     run_cmd(["git", "clone", REPO_URL, REPO_NAME], show_output=True)
     
     if os.path.exists(REPO_NAME):
@@ -398,12 +389,11 @@ def main():
             if os.path.exists(t_path):
                 console.print(f"   [cyan]➤[/cyan] Compiling [bold]{target}[/bold]...")
                 
-                # Patch config.mk (MANDATORY for Arch Linux X11 paths)
+                # Patch config.mk (Critical for Arch compilation)
                 config_mk = os.path.join(t_path, "config.mk")
                 if os.path.exists(config_mk):
                     try:
                         with open(config_mk, "r") as f: mk_data = f.read()
-                        # Standard Arch paths are /usr/include and /usr/lib
                         mk_data = mk_data.replace("/usr/X11R6/include", "/usr/include")
                         mk_data = mk_data.replace("/usr/X11R6/lib", "/usr/lib")
                         if "/usr/include/freetype2" not in mk_data:
@@ -412,20 +402,20 @@ def main():
                     except: pass
 
                 os.chdir(t_path)
-                # We hide output here unless error, to keep it looking clean
+                # Clean install to /usr/local/bin (default)
                 exit_code = os.system("sudo make clean install > /dev/null 2>&1")
                 
                 if exit_code != 0:
                     console.print(Align.center(f"[{C_ERROR}]CRITICAL ERROR: Failed to compile {target}.[/]"))
-                    console.print(Align.center("[red]Dependencies might be missing. Re-running with output:[/red]"))
-                    os.system("sudo make clean install") # Run again with output
+                    console.print(Align.center("[red]Re-running with output to debug:[/red]"))
+                    os.system("sudo make clean install")
                     sys.exit(1)
                     
                 os.chdir("../..")
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # .xinitrc creation
+        # .xinitrc creation (SAFE MODE)
         console.print(Align.center("\n[dim]Configuring startup...[/dim]"))
         xinitrc_path = os.path.expanduser("~/.xinitrc")
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
@@ -461,6 +451,27 @@ exec dwm
         
         os.system(f"chmod +x {xinitrc_path}")
         
+        # --- AUTO-START LOGIC (TTY1) ---
+        console.print(Align.center("\n[dim]Enabling auto-start on login (TTY1)...[/dim]"))
+        
+        auto_start_snippet = """
+# Auto-start X11 (guhwm) on TTY1
+if [ -z "${DISPLAY}" ] && [ "${XDG_VTNR}" -eq 1 ]; then
+    exec startx
+fi
+"""
+        for profile in [".bash_profile", ".zprofile", ".profile"]:
+            p_path = os.path.expanduser(f"~/{profile}")
+            
+            if not os.path.exists(p_path):
+                with open(p_path, "w") as f: f.write("")
+            
+            with open(p_path, "r") as f: content = f.read()
+            
+            if "exec startx" not in content:
+                with open(p_path, "a") as f: f.write(auto_start_snippet)
+                console.print(f"   [green]✔[/green] [dim]Updated {profile}[/dim]")
+        
     else:
         console.print(Align.center(f"[{C_ERROR}]Failed to clone repository.[/]"))
 
@@ -468,7 +479,7 @@ exec dwm
     print_header()
     
     success_msg = Text("\nInstallation Complete!\n", style="bold green", justify="center")
-    success_msg.append("\nType 'startx' to launch guhwm.\n", style="white")
+    success_msg.append("\nReboot to launch guhwm.\n", style="white")
     
     console.print(Align.center(Panel(success_msg, border_style="green", box=box.DOUBLE, padding=1)))
     
