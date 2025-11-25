@@ -103,12 +103,10 @@ def center_print(text_obj):
     console.print(Align.center(text_obj))
 
 def install_config_file(src_path, dest_dir, file_name):
-    """Safely installs a config file with overwrite prompt."""
     if not os.path.exists(src_path): return
     full_dest_dir = os.path.expanduser(dest_dir)
     full_dest_path = os.path.join(full_dest_dir, file_name)
     os.makedirs(full_dest_dir, exist_ok=True)
-
     if os.path.exists(full_dest_path):
         if questionary.confirm(f"Config file '{file_name}' already exists in {dest_dir}. Overwrite?").ask():
             shutil.copy(src_path, full_dest_path)
@@ -134,7 +132,6 @@ def install_aur_package(package_name, helper):
 def setup_aur_helper(choice):
     if choice == "None": return None
     if shutil.which(choice.lower()): return choice.lower()
-
     console.print(Align.center(f"[yellow]Installing {choice}...[/yellow]"))
     build_dir = os.path.expanduser(f"~/{choice.lower()}_build_temp")
     repo = f"https://aur.archlinux.org/{choice.lower()}-bin.git"
@@ -360,8 +357,11 @@ def main():
     print_header()
     console.print(Align.center(Text("Installing guhwm...", style=C_PRIMARY)))
     
+    # === FIX: FORCE CLEANUP OF OLD REPO ===
     if os.path.exists("guhwm"):
-        shutil.rmtree("guhwm")
+        console.print(Align.center("[yellow]Removing previous installation files...[/yellow]"))
+        # Using sudo to remove potential root-owned files from failed makes
+        os.system("sudo rm -rf guhwm")
     
     run_cmd(["git", "clone", REPO_URL], show_output=True)
     
@@ -393,9 +393,12 @@ def main():
             console.print(Align.center("[yellow]Applying Windows/Super key to config...[/yellow]"))
             config_path = "guhwm/dwm/config.def.h"
             if os.path.exists(config_path):
+                # Read
                 with open(config_path, 'r') as f:
                     content = f.read()
+                # Replace
                 content = content.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
+                # Write
                 with open(config_path, 'w') as f:
                     f.write(content)
 
@@ -436,7 +439,6 @@ def main():
                 os.chdir(t_path)
                 
                 # Clean, Build, Install (With explicit output)
-                # We do not suppress output here so you can see errors
                 exit_code = os.system("sudo make PREFIX=/usr clean install")
                 
                 if exit_code != 0:
