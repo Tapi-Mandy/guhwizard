@@ -1,40 +1,37 @@
 #!/bin/bash
-
 # ===============================================================
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Bash Side - Vanilla/Coffee Theme)
-# Using slightly different ANSI codes for better distinction
-GOLD='\033[0;33m'    
-CREAM='\033[1;37m'   
-BROWN='\033[0;31m'   # closest standard bash has to brown/dark red
-NC='\033[0m'         # No Color
+# Colors (Bash Side - Gruvbox Theme)
+GRUV_YELLOW='\033[1;33m' 
+GRUV_CYAN='\033[0;36m'   
+GRUV_RED='\033[0;31m'
+NC='\033[0m'
 
-echo -e "${GOLD}[*] Initializing guhwizard...${NC}"
+echo -e "${GRUV_YELLOW}[*] Initializing guhwizard...${NC}"
 
 # 1. Check for Sudo
 if [ "$EUID" -eq 0 ]; then
-  echo -e "${BROWN}[!] Please run this script as a standard user (not root).${NC}"
+  echo -e "${GRUV_RED}[!] Please run this script as a standard user (not root).${NC}"
   exit 1
 fi
 
 # 2. Dependencies
-echo -e "${GOLD}[*] Installing system dependencies...${NC}"
-# We quiet this part to get to the TUI faster, but show errors if they happen
+echo -e "${GRUV_CYAN}[*] Installing system dependencies...${NC}"
 sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
 
 # 3. TUI Libraries
-echo -e "${GOLD}[*] Setting up Python TUI libraries...${NC}"
+echo -e "${GRUV_CYAN}[*] Setting up Python TUI libraries...${NC}"
 pip install rich questionary --break-system-packages --no-warn-script-location
 
 if [ $? -ne 0 ]; then
-    echo -e "${BROWN}[!] Failed to install Python libraries. Exiting.${NC}"
+    echo -e "${GRUV_RED}[!] Failed to install Python libraries. Exiting.${NC}"
     exit 1
 fi
 
 # 4. Python Installer Generation
-echo -e "${GOLD}[*] Launching guhwizard...${NC}"
+echo -e "${GRUV_YELLOW}[*] Launching guhwizard...${NC}"
 
 cat << 'EOF' > installer.py
 import os
@@ -54,12 +51,11 @@ import questionary
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
 console = Console()
 
-# --- Colors & Styles (Dark Vanilla Theme) ---
-# Adjusted for better contrast/warmth
-C_PRIMARY = "bold #FFD700"     # Rich Gold
-C_ACCENT = "#F5DEB3"           # Wheat / Cream
-C_DARK = "#3E2723"             # Deep Coffee (Borders)
-C_DIM = "#D7CCC8"              # Soft Mushroom/Beige
+# --- Colors & Styles (Gruvbox Theme) ---
+C_PRIMARY = "bold #d79921"     # Retro Yellow/Orange
+C_ACCENT = "#ebdbb2"           # Off-White / Cream
+C_DARK = "#458588"             # Muted Teal/Blue (Good contrast)
+C_DIM = "#a89984"              # Muted Earthy Grey
 
 # --- Package Definitions ---
 class Pkg:
@@ -226,7 +222,7 @@ def main():
     # 1. Install Base
     print_header()
     center_print(Text("Base Packages", style=C_PRIMARY))
-    console.print(Align.center("[dim]Installing base packages via pacman (output shown below)...[/dim]"))
+    console.print(Align.center("[dim]Installing base packages via pacman...[/dim]"))
     print() 
     
     install_pacman_packages(base_pkgs)
@@ -422,43 +418,40 @@ def main():
         for target in targets:
             t_path = os.path.join("guhwm", target)
             if os.path.exists(t_path):
-                # FIX: Edit config.mk to change install prefix from /usr/local to /usr
-                # This ensures DWM is in the standard PATH for all Display Managers
-                config_mk = os.path.join(t_path, "config.mk")
-                if os.path.exists(config_mk):
-                    with open(config_mk, 'r') as f:
-                        data = f.read()
-                    data = data.replace("PREFIX = /usr/local", "PREFIX = /usr")
-                    with open(config_mk, 'w') as f:
-                        f.write(data)
-
                 console.print(Align.center(f"Compiling {target}..."))
                 os.chdir(t_path)
-                os.system("sudo make clean install")
+                # CRITICAL FIX: Force PREFIX to /usr to ensure binaries go to /usr/bin/
+                # This fixes the 'exec: dwm: not found' issue in Ly/LightDM
+                os.system("sudo make PREFIX=/usr clean install")
                 os.chdir("../..")
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # --- Session Script ---
+        # Verify Installation
+        if not os.path.exists("/usr/bin/dwm"):
+             console.print(Align.center(Text("[CRITICAL] dwm binary not found in /usr/bin. Compilation failed.", style="bold red")))
+             sys.exit(1)
+
+        # --- Session Script (Fix for DMs) ---
         console.print(Align.center("Creating session startup script..."))
         
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
-        # NOTE: dwm is now installed to /usr/bin/dwm due to the PREFIX change above.
+        # NOTE: Using absolute paths to /usr/bin/ binaries
         session_script = f"""#!/bin/sh
 # --- guhwm session ---
 
 # 1. Set Wallpaper (Default)
-feh --bg-fill {wall_path} &
+/usr/bin/feh --bg-fill {wall_path} &
 
 # 2. Start Compositor (Picom)
-picom -b &
+/usr/bin/picom -b &
 
 # 3. Start Status Bar
-slstatus &
+/usr/bin/slstatus &
 
 # 4. Start Window Manager (Must be last with exec)
-# We use /usr/bin/dwm because we changed PREFIX to /usr
+# Using absolute path to ensure DM finds it
 exec /usr/bin/dwm
 """
         with open("guhwm-session", "w") as f:
@@ -474,7 +467,7 @@ Name=guhwm
 Comment=Guh Window Manager
 Exec=/usr/bin/guhwm-session
 Icon=guhwm
-Type=XSession
+Type=Application
 """
         with open("guhwm.desktop", "w") as f:
             f.write(desktop_entry)
@@ -492,7 +485,7 @@ Type=XSession
     console.print(Align.center(Panel(final_text, border_style="green", expand=False)))
     
     if questionary.confirm("Do you want to reboot now?").ask():
-        # Sudo is required for reboot if not using systemctl/polkit rules for user
+        # Sudo is required for reboot
         os.system("sudo reboot")
     else:
         console.print("Exiting installer...")
@@ -509,7 +502,7 @@ EOF
 if [ -f "installer.py" ]; then
     python3 installer.py
 else
-    echo -e "${RED}[!] Error: installer.py was not created.${NC}"
+    echo -e "${GRUV_RED}[!] Error: installer.py was not created.${NC}"
 fi
 
 # 6. Cleanup
