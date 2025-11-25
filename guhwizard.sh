@@ -4,36 +4,37 @@
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Bash Side - Vanilla/Brown Theme)
-VANILLA='\033[1;33m' # Light Yellow/Bold
-COFFEE='\033[0;33m'  # Brownish
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+# Colors (Bash Side - Vanilla/Coffee Theme)
+# Using slightly different ANSI codes for better distinction
+GOLD='\033[0;33m'    
+CREAM='\033[1;37m'   
+BROWN='\033[0;31m'   # closest standard bash has to brown/dark red
+NC='\033[0m'         # No Color
 
-echo -e "${VANILLA}[*] Initializing guhwizard...${NC}"
+echo -e "${GOLD}[*] Initializing guhwizard...${NC}"
 
 # 1. Check for Sudo
 if [ "$EUID" -eq 0 ]; then
-  echo -e "${RED}[!] Please run this script as a standard user (not root).${NC}"
+  echo -e "${BROWN}[!] Please run this script as a standard user (not root).${NC}"
   exit 1
 fi
 
 # 2. Dependencies
-echo -e "${COFFEE}[*] Installing system dependencies...${NC}"
+echo -e "${GOLD}[*] Installing system dependencies...${NC}"
 # We quiet this part to get to the TUI faster, but show errors if they happen
 sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
 
 # 3. TUI Libraries
-echo -e "${COFFEE}[*] Setting up Python TUI libraries...${NC}"
+echo -e "${GOLD}[*] Setting up Python TUI libraries...${NC}"
 pip install rich questionary --break-system-packages --no-warn-script-location
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}[!] Failed to install Python libraries. Exiting.${NC}"
+    echo -e "${BROWN}[!] Failed to install Python libraries. Exiting.${NC}"
     exit 1
 fi
 
 # 4. Python Installer Generation
-echo -e "${VANILLA}[*] Launching guhwizard...${NC}"
+echo -e "${GOLD}[*] Launching guhwizard...${NC}"
 
 cat << 'EOF' > installer.py
 import os
@@ -53,11 +54,12 @@ import questionary
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
 console = Console()
 
-# --- Colors & Styles (Vanilla / Dark Vanilla Theme) ---
-C_PRIMARY = "bold #E3C58E"     # Vanilla Gold
-C_ACCENT = "#FFF8DC"           # Cornsilk / Cream
-C_DARK = "#4E342E"             # Dark Coffee (Borders)
-C_DIM = "dim #D7CCC8"          # Soft Beige (Subtitles)
+# --- Colors & Styles (Dark Vanilla Theme) ---
+# Adjusted for better contrast/warmth
+C_PRIMARY = "bold #FFD700"     # Rich Gold
+C_ACCENT = "#F5DEB3"           # Wheat / Cream
+C_DARK = "#3E2723"             # Deep Coffee (Borders)
+C_DIM = "#D7CCC8"              # Soft Mushroom/Beige
 
 # --- Package Definitions ---
 class Pkg:
@@ -214,7 +216,6 @@ dms = [
     Pkg("LightDM", "Lightweight display manager", "lightdm"),
     Pkg("Ly", "TUI display manager", "ly"),
     Pkg("SDDM", "QML based display manager", "sddm"),
-    Pkg("XDM", "X Display Manager", "xorg-xdm", service_name="xdm"),
 ]
 
 # --- Main Execution ---
@@ -260,7 +261,7 @@ def main():
         ("Browsers", browsers),
         ("Communication", comm_apps),
         ("Developer Tools", dev_tools),
-        ("Wallpaper Tools", wall_apps),
+        ("Wallpaper Manager", wall_apps),
         ("Miscellaneous Tools", misc_apps),
     ]
 
@@ -397,8 +398,8 @@ def main():
         mod_choice = questionary.select(
             "Which key would you like to use as the 'Mod' key?",
             choices=[
-                "Alt (Default / Mod1)", 
-                "Windows/Super (Recommended / Mod4)"
+                "Alt (Default, recommended / Mod1)", 
+                "Windows/Super (Mod4)"
             ]
         ).ask()
 
@@ -415,12 +416,22 @@ def main():
                 with open(config_path, 'w') as f:
                     f.write(content)
 
-        # --- Compilation ---
+        # --- Compilation (WITH PATH FIX) ---
         console.print(Align.center(Text("Compiling guhwm...", style=C_PRIMARY)))
         targets = ["dwm", "slstatus"]
         for target in targets:
             t_path = os.path.join("guhwm", target)
             if os.path.exists(t_path):
+                # FIX: Edit config.mk to change install prefix from /usr/local to /usr
+                # This ensures DWM is in the standard PATH for all Display Managers
+                config_mk = os.path.join(t_path, "config.mk")
+                if os.path.exists(config_mk):
+                    with open(config_mk, 'r') as f:
+                        data = f.read()
+                    data = data.replace("PREFIX = /usr/local", "PREFIX = /usr")
+                    with open(config_mk, 'w') as f:
+                        f.write(data)
+
                 console.print(Align.center(f"Compiling {target}..."))
                 os.chdir(t_path)
                 os.system("sudo make clean install")
@@ -428,11 +439,12 @@ def main():
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # --- Session Script (Fix for DMs) ---
+        # --- Session Script ---
         console.print(Align.center("Creating session startup script..."))
         
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
+        # NOTE: dwm is now installed to /usr/bin/dwm due to the PREFIX change above.
         session_script = f"""#!/bin/sh
 # --- guhwm session ---
 
@@ -446,21 +458,21 @@ picom -b &
 slstatus &
 
 # 4. Start Window Manager (Must be last with exec)
-# Using absolute path to ensure DM finds it
-exec /usr/local/bin/dwm
+# We use /usr/bin/dwm because we changed PREFIX to /usr
+exec /usr/bin/dwm
 """
         with open("guhwm-session", "w") as f:
             f.write(session_script)
             
-        os.system("sudo mv guhwm-session /usr/local/bin/guhwm-session")
-        os.system("sudo chmod +x /usr/local/bin/guhwm-session")
+        os.system("sudo mv guhwm-session /usr/bin/guhwm-session")
+        os.system("sudo chmod +x /usr/bin/guhwm-session")
 
         # Create .desktop file
         desktop_entry = """[Desktop Entry]
 Encoding=UTF-8
 Name=guhwm
 Comment=Guh Window Manager
-Exec=/usr/local/bin/guhwm-session
+Exec=/usr/bin/guhwm-session
 Icon=guhwm
 Type=XSession
 """
@@ -475,10 +487,13 @@ Type=XSession
 
     # 8. Finish
     print_header()
-    console.print(Panel(Align.center("[bold green]Installation Complete![/bold green]\n\nguhwm and your selected applications are installed."), border_style="green"))
+    # Centered Panel with centered text
+    final_text = Text("\nInstallation Complete!\n\nguhwm and your selected applications are installed.\n", justify="center", style="bold green")
+    console.print(Align.center(Panel(final_text, border_style="green", expand=False)))
     
     if questionary.confirm("Do you want to reboot now?").ask():
-        os.system("reboot")
+        # Sudo is required for reboot if not using systemctl/polkit rules for user
+        os.system("sudo reboot")
     else:
         console.print("Exiting installer...")
 
