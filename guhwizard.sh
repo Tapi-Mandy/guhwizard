@@ -3,35 +3,34 @@
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Bash Side - Gruvbox Theme)
-GRUV_YELLOW='\033[1;33m' 
-GRUV_CYAN='\033[0;36m'   
-GRUV_RED='\033[0;31m'
-NC='\033[0m'
+# Colors (Bash Side - Midnight Rose Theme)
+MAGENTA='\033[1;35m'
+ROSE='\033[0;31m' 
+NC='\033[0m' # No Color
 
-echo -e "${GRUV_YELLOW}[*] Initializing guhwizard...${NC}"
+echo -e "${MAGENTA}[*] Initializing guhwizard...${NC}"
 
 # 1. Check for Sudo
 if [ "$EUID" -eq 0 ]; then
-  echo -e "${GRUV_RED}[!] Please run this script as a standard user (not root).${NC}"
+  echo -e "${ROSE}[!] Please run this script as a standard user (not root).${NC}"
   exit 1
 fi
 
 # 2. Dependencies
-echo -e "${GRUV_CYAN}[*] Installing system dependencies...${NC}"
+echo -e "${MAGENTA}[*] Installing system dependencies...${NC}"
 sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
 
 # 3. TUI Libraries
-echo -e "${GRUV_CYAN}[*] Setting up Python TUI libraries...${NC}"
+echo -e "${MAGENTA}[*] Setting up Python TUI libraries...${NC}"
 pip install rich questionary --break-system-packages --no-warn-script-location
 
 if [ $? -ne 0 ]; then
-    echo -e "${GRUV_RED}[!] Failed to install Python libraries. Exiting.${NC}"
+    echo -e "${ROSE}[!] Failed to install Python libraries. Exiting.${NC}"
     exit 1
 fi
 
 # 4. Python Installer Generation
-echo -e "${GRUV_YELLOW}[*] Launching guhwizard...${NC}"
+echo -e "${MAGENTA}[*] Launching guhwizard...${NC}"
 
 cat << 'EOF' > installer.py
 import os
@@ -51,11 +50,11 @@ import questionary
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
 console = Console()
 
-# --- Colors & Styles (Gruvbox Theme) ---
-C_PRIMARY = "bold #d79921"     # Retro Yellow/Orange
-C_ACCENT = "#ebdbb2"           # Off-White / Cream
-C_DARK = "#458588"             # Muted Teal/Blue (Good contrast)
-C_DIM = "#a89984"              # Muted Earthy Grey
+# --- Colors & Styles (Midnight Rose Theme) ---
+C_PRIMARY = "bold magenta"     
+C_ACCENT = "#ff5faf"           
+C_DARK = "#5f005f"             
+C_DIM = "dim #d75f87"          
 
 # --- Package Definitions ---
 class Pkg:
@@ -71,8 +70,7 @@ class Pkg:
 def run_cmd(cmd, shell=False, show_output=False):
     """
     Executes a command.
-    If show_output is True, stdout/stderr are shown to the user (useful for pacman).
-    If show_output is False, they are suppressed.
+    If show_output is True, stdout/stderr are shown to the user.
     """
     try:
         if show_output:
@@ -106,17 +104,12 @@ def center_print(text_obj):
 
 def install_config_file(src_path, dest_dir, file_name):
     """Safely installs a config file with overwrite prompt."""
-    if not os.path.exists(src_path):
-        return
-
+    if not os.path.exists(src_path): return
     full_dest_dir = os.path.expanduser(dest_dir)
     full_dest_path = os.path.join(full_dest_dir, file_name)
-
-    # Ensure directory exists
     os.makedirs(full_dest_dir, exist_ok=True)
 
     if os.path.exists(full_dest_path):
-        # Ask user
         if questionary.confirm(f"Config file '{file_name}' already exists in {dest_dir}. Overwrite?").ask():
             shutil.copy(src_path, full_dest_path)
             console.print(Align.center(f"[dim]Overwrote {file_name}[/dim]"))
@@ -128,16 +121,15 @@ def install_config_file(src_path, dest_dir, file_name):
 
 # --- Core Logic ---
 
-def install_pacman_packages(packages, description="Installing packages"):
+def install_pacman_packages(packages):
     if not packages: return
-    # We show output directly for base packages so the user sees progress
     cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
     run_cmd(cmd, show_output=True)
 
 def install_aur_package(package_name, helper):
     if not helper: return False
     cmd = [helper, "-S", "--noconfirm", "--needed", package_name]
-    return run_cmd(cmd, show_output=True) # Show output for AUR too
+    return run_cmd(cmd, show_output=True)
 
 def setup_aur_helper(choice):
     if choice == "None": return None
@@ -159,8 +151,10 @@ def setup_aur_helper(choice):
 
 # --- Categories ---
 
+# Added imlib2, libx11, libxinerama, libxft expressly to ensure compilation
 base_pkgs = [
-    "xorg", "xorg-xinit", "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "alsa-utils", 
+    "xorg", "xorg-xinit", "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
+    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "alsa-utils", 
     "noto-fonts", "noto-fonts-cjk", "noto-fonts-emoji", 
     "ttf-dejavu", "ttf-fira-code", "ttf-jetbrains-mono", "ttf-jetbrains-mono-nerd"
 ]
@@ -375,11 +369,7 @@ def main():
         
         # --- Config Files Check ---
         console.print(Align.center("Checking configuration files..."))
-        
-        # 1. Picom
         install_config_file("guhwm/picom.conf", "~/.config/picom", "picom.conf")
-        
-        # 2. Rofi
         install_config_file("guhwm/config.rasi", "~/.config/rofi", "config.rasi")
         
         # --- Wallpapers ---
@@ -403,26 +393,57 @@ def main():
             console.print(Align.center("[yellow]Applying Windows/Super key to config...[/yellow]"))
             config_path = "guhwm/dwm/config.def.h"
             if os.path.exists(config_path):
-                # Read
                 with open(config_path, 'r') as f:
                     content = f.read()
-                # Replace
                 content = content.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
-                # Write
                 with open(config_path, 'w') as f:
                     f.write(content)
 
-        # --- Compilation (WITH PATH FIX) ---
+        # --- Compilation (WITH CONFIG.MK FIX & VISIBLE OUTPUT) ---
         console.print(Align.center(Text("Compiling guhwm...", style=C_PRIMARY)))
+        console.print(Align.center("[dim]Output is enabled to debug compilation errors.[/dim]"))
+        
         targets = ["dwm", "slstatus"]
         for target in targets:
             t_path = os.path.join("guhwm", target)
             if os.path.exists(t_path):
                 console.print(Align.center(f"Compiling {target}..."))
+                
+                # --- AUTO-PATCH config.mk for Arch Linux ---
+                config_mk = os.path.join(t_path, "config.mk")
+                if os.path.exists(config_mk):
+                    try:
+                        with open(config_mk, "r") as f:
+                            mk_data = f.read()
+                        
+                        # Replace generic X11 paths with Arch paths
+                        mk_data = mk_data.replace("/usr/X11R6/include", "/usr/include")
+                        mk_data = mk_data.replace("/usr/X11R6/lib", "/usr/lib")
+                        
+                        # Ensure Freetype paths are correct (often missing /usr/include/freetype2)
+                        if "/usr/include/freetype2" not in mk_data:
+                            mk_data = mk_data.replace("FREETYPEINC = /usr/include", "FREETYPEINC = /usr/include/freetype2")
+                        
+                        # Force PREFIX
+                        mk_data = mk_data.replace("PREFIX = /usr/local", "PREFIX = /usr")
+                        
+                        with open(config_mk, "w") as f:
+                            f.write(mk_data)
+                        console.print(Align.center("[green]Patched config.mk for Arch Linux paths.[/green]"))
+                    except Exception as e:
+                        console.print(Align.center(f"[red]Warning: Could not patch config.mk: {e}[/red]"))
+
                 os.chdir(t_path)
-                # CRITICAL FIX: Force PREFIX to /usr to ensure binaries go to /usr/bin/
-                # This fixes the 'exec: dwm: not found' issue in Ly/LightDM
-                os.system("sudo make PREFIX=/usr clean install")
+                
+                # Clean, Build, Install (With explicit output)
+                # We do not suppress output here so you can see errors
+                exit_code = os.system("sudo make PREFIX=/usr clean install")
+                
+                if exit_code != 0:
+                    console.print(Align.center(f"[bold red]CRITICAL ERROR: Failed to compile {target}.[/bold red]"))
+                    console.print(Align.center("[red]See the error output above. Exiting.[/red]"))
+                    sys.exit(1)
+                    
                 os.chdir("../..")
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
@@ -432,12 +453,12 @@ def main():
              console.print(Align.center(Text("[CRITICAL] dwm binary not found in /usr/bin. Compilation failed.", style="bold red")))
              sys.exit(1)
 
-        # --- Session Script (Fix for DMs) ---
+        # --- Session Script ---
         console.print(Align.center("Creating session startup script..."))
         
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
-        # NOTE: Using absolute paths to /usr/bin/ binaries
+        # Absolute paths
         session_script = f"""#!/bin/sh
 # --- guhwm session ---
 
@@ -451,7 +472,6 @@ def main():
 /usr/bin/slstatus &
 
 # 4. Start Window Manager (Must be last with exec)
-# Using absolute path to ensure DM finds it
 exec /usr/bin/dwm
 """
         with open("guhwm-session", "w") as f:
@@ -480,12 +500,10 @@ Type=Application
 
     # 8. Finish
     print_header()
-    # Centered Panel with centered text
     final_text = Text("\nInstallation Complete!\n\nguhwm and your selected applications are installed.\n", justify="center", style="bold green")
     console.print(Align.center(Panel(final_text, border_style="green", expand=False)))
     
     if questionary.confirm("Do you want to reboot now?").ask():
-        # Sudo is required for reboot
         os.system("sudo reboot")
     else:
         console.print("Exiting installer...")
@@ -502,7 +520,7 @@ EOF
 if [ -f "installer.py" ]; then
     python3 installer.py
 else
-    echo -e "${GRUV_RED}[!] Error: installer.py was not created.${NC}"
+    echo -e "${ROSE}[!] Error: installer.py was not created.${NC}"
 fi
 
 # 6. Cleanup
