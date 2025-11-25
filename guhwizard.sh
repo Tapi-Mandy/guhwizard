@@ -3,7 +3,7 @@
 # --- GUHWIZARD -------------------------------------------------
 # ===============================================================
 
-# Colors (Bash Side - Midnight Rose Theme)
+# Colors (Midnight Rose)
 MAGENTA='\033[1;35m'
 ROSE='\033[0;31m' 
 NC='\033[0m' # No Color
@@ -16,18 +16,17 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
+# Sudo Keep-Alive
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
 # 2. Dependencies
 echo -e "${MAGENTA}[*] Installing system dependencies...${NC}"
 sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
 
 # 3. TUI Libraries
 echo -e "${MAGENTA}[*] Setting up Python TUI libraries...${NC}"
-pip install rich questionary --break-system-packages --no-warn-script-location
-
-if [ $? -ne 0 ]; then
-    echo -e "${ROSE}[!] Failed to install Python libraries. Exiting.${NC}"
-    exit 1
-fi
+pip install rich questionary --break-system-packages --no-warn-script-location > /dev/null 2>&1
 
 # 4. Python Installer Generation
 echo -e "${MAGENTA}[*] Launching guhwizard...${NC}"
@@ -44,12 +43,12 @@ from rich.text import Text
 from rich.table import Table
 from rich.align import Align
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich import box
 import questionary
 
 # --- Configuration ---
-# NOTE: If you change this URL, the script will automatically adapt to the new folder name.
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
-REPO_NAME = REPO_URL.split("/")[-1].replace(".git", "")
+REPO_NAME = REPO_URL.rstrip("/").split("/")[-1].replace(".git", "")
 
 console = Console()
 
@@ -58,16 +57,17 @@ C_PRIMARY = "bold magenta"
 C_ACCENT = "#ff5faf"           
 C_DARK = "#5f005f"             
 C_DIM = "dim #d75f87"          
+C_SUCCESS = "bold green"
+C_ERROR = "bold red"
 
 # --- Package Definitions ---
 class Pkg:
-    def __init__(self, name, desc, pkg_name=None, is_aur=False, binary_name=None, service_name=None):
+    def __init__(self, name, desc, pkg_name=None, is_aur=False, binary_name=None):
         self.name = name
         self.desc = desc
         self.pkg_name = pkg_name if pkg_name else name.lower()
         self.is_aur = is_aur
         self.binary_name = binary_name if binary_name else self.pkg_name
-        self.service_name = service_name if service_name else self.pkg_name
 
 # --- Utilities ---
 def run_cmd(cmd, shell=False, show_output=False):
@@ -96,45 +96,72 @@ def print_header():
     logo = Text(ascii_art, style=C_PRIMARY)
     subtitle = Text("Guh Window Manager Installer", style=C_DIM)
     content = Align.center(Text.assemble(logo, "\n", subtitle))
-    console.print(Panel(content, border_style=C_DARK, expand=True))
+    console.print(Panel(content, border_style=C_DARK, box=box.ROUNDED, padding=(1, 2), expand=True))
 
-def center_print(text_obj):
-    console.print(Align.center(text_obj))
+def print_section(title):
+    console.print()
+    console.rule(f"[{C_PRIMARY}]{title}[/]")
+    console.print()
 
 def install_config_file(src_path, dest_dir, file_name):
     if not os.path.exists(src_path): return
     full_dest_dir = os.path.expanduser(dest_dir)
     full_dest_path = os.path.join(full_dest_dir, file_name)
     os.makedirs(full_dest_dir, exist_ok=True)
+    
+    status_icon = ""
+    status_text = ""
+    
     if os.path.exists(full_dest_path):
-        if questionary.confirm(f"Config file '{file_name}' already exists in {dest_dir}. Overwrite?").ask():
+        if questionary.confirm(f"Config file '{file_name}' already exists. Overwrite?").ask():
             shutil.copy(src_path, full_dest_path)
-            console.print(Align.center(f"[dim]Overwrote {file_name}[/dim]"))
+            status_icon = "[yellow]![/yellow]"
+            status_text = f"[dim]Overwrote {file_name}[/dim]"
         else:
-            console.print(Align.center(f"[dim]Skipped {file_name}[/dim]"))
+            status_icon = "[dim]-[/dim]"
+            status_text = f"[dim]Skipped {file_name}[/dim]"
     else:
         shutil.copy(src_path, full_dest_path)
-        console.print(Align.center(f"[dim]Installed {file_name}[/dim]"))
+        status_icon = "[green]✔[/green]"
+        status_text = f"[dim]Installed {file_name}[/dim]"
+        
+    console.print(f" {status_icon} {status_text}")
 
 # --- Core Logic ---
 
-def install_pacman_packages(packages):
+def install_pacman_packages(packages, description="Installing packages..."):
     if not packages: return
-    cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
-    run_cmd(cmd, show_output=True)
+    
+    # ANIMATION: Use Rich Spinner for Pacman operations
+    with Progress(
+        SpinnerColumn(style=C_ACCENT),
+        TextColumn("[bold white]{task.description}"),
+        transient=True
+    ) as progress:
+        progress.add_task(description, total=None)
+        cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
+        # Run silently to keep the animation clean
+        run_cmd(cmd, show_output=False)
 
 def install_aur_package(package_name, helper):
     if not helper: return False
+    # AUR helpers usually need interaction, so we show output
     cmd = [helper, "-S", "--noconfirm", "--needed", package_name]
     return run_cmd(cmd, show_output=True)
 
 def setup_aur_helper(choice):
     if choice == "None": return None
     if shutil.which(choice.lower()): return choice.lower()
-    console.print(Align.center(f"[yellow]Installing {choice}...[/yellow]"))
+    
+    console.print(f"   [yellow]➤[/yellow] Installing {choice}...", style="dim")
+    
     build_dir = os.path.expanduser(f"~/{choice.lower()}_build_temp")
     repo = f"https://aur.archlinux.org/{choice.lower()}-bin.git"
+    
+    if os.path.exists(build_dir): shutil.rmtree(build_dir)
+
     try:
+        # Show output here as makepkg can be verbose/interactive
         run_cmd(["git", "clone", repo, build_dir], show_output=True)
         os.chdir(build_dir)
         os.system("makepkg -si --noconfirm")
@@ -142,16 +169,26 @@ def setup_aur_helper(choice):
         shutil.rmtree(build_dir)
         return choice.lower()
     except Exception as e:
-        console.print(Align.center(f"[red]Failed to install {choice}: {e}[/red]"))
+        console.print(f"   [{C_ERROR}]✖[/] Failed to install {choice}", style="dim")
         return None
 
 # --- Categories ---
 
 base_pkgs = [
-    "xorg", "xorg-xinit", "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
-    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "alsa-utils", 
-    "noto-fonts", "noto-fonts-cjk", "noto-fonts-emoji", 
-    "ttf-dejavu", "ttf-fira-code", "ttf-jetbrains-mono", "ttf-jetbrains-mono-nerd"
+    # Essential X11 components
+    "xorg", "xorg-xinit", 
+    
+    # Compilation Libraries
+    "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
+    
+    # Core
+    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq",
+    
+    # Audio
+    "alsa-utils", 
+    
+    # Fonts
+    "noto-fonts", "noto-fonts-cjk", "noto-fonts-emoji", "ttf-jetbrains-mono-nerd"
 ]
 
 browsers = [
@@ -162,6 +199,7 @@ browsers = [
 ]
 
 comm_apps = [
+    Pkg("AyuGram", "Telegram client with good customization", "ayugram-desktop-bin", is_aur=True),
     Pkg("Discord", "All-in-one voice and text chat", "discord"),
     Pkg("Telegram", "Official Telegram Desktop client", "telegram-desktop"),
     Pkg("Vesktop", "The cutest Discord client", "vesktop-bin", is_aur=True),
@@ -173,7 +211,7 @@ dev_tools = [
     Pkg("Nano", "Simple terminal text editor", "nano"),
     Pkg("Neovim", "Fork of Vim aiming to improve user experience", "neovim"),
     Pkg("Sublime", "Sophisticated text editor for code", "sublime-text-4", is_aur=True),
-    Pkg("Vim", "Highly configurable text editor", "vim"),
+    Pkg("Vim", "Vi iMproved, highly configurable text editor", "vim"),
     Pkg("VSCodium", "Free/Libre Open Source binary of VSCode", "vscodium-bin", is_aur=True),
 ]
 
@@ -197,43 +235,40 @@ shells = [
     Pkg("Zsh", "Shell designed for advanced use", "zsh"),
 ]
 
-dms = [
-    Pkg("LightDM", "Lightweight display manager", "lightdm"),
-    Pkg("Ly", "TUI display manager", "ly"),
-    Pkg("SDDM", "QML based display manager", "sddm"),
-]
-
 # --- Main Execution ---
 
 def main():
     print_header()
 
     # 1. Install Base
-    print_header()
-    center_print(Text("Base Packages", style=C_PRIMARY))
-    console.print(Align.center("[dim]Installing base packages via pacman...[/dim]"))
-    print() 
-    install_pacman_packages(base_pkgs)
-    print()
-    center_print(Text("✔ Base packages installed.", style="green"))
-    time.sleep(2)
+    print_section("Base System")
+    
+    # New Spinner Animation
+    install_pacman_packages(base_pkgs, "Installing base packages...")
+    
+    # Refresh Fonts (Silent)
+    run_cmd(["fc-cache", "-fv"], show_output=False)
+    
+    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
+    time.sleep(1.5)
 
     # 2. Welcome
     print_header()
-    welcome_text = Text("Welcome to the guhwm installer.\nThis will set up your environment, install applications, and configure the window manager.", justify="center")
-    welcome_text.stylize(C_ACCENT)
-    console.print(Panel(Align.center(welcome_text), border_style=C_DARK, title="Welcome", title_align="center"))
+    welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
+    console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
+    
     if not questionary.confirm("Ready to proceed?").ask():
         sys.exit()
 
     # 3. AUR Helper
     print_header()
-    center_print(Text("AUR Helper Selection", style=C_PRIMARY))
-    center_print(Text("Required for Brave, Vesktop, Waypaper, etc.", style="dim"))
+    print_section("AUR Helper")
+    console.print(Align.center("[dim]Required for many applications (Brave, Vesktop, Waypaper, etc.)[/dim]\n"))
+    
     aur_choice = questionary.select("Choose an AUR helper:", choices=["Yay", "Paru", "None"]).ask()
     aur_helper = setup_aur_helper(aur_choice)
 
-    # 4. Categories
+    # 4. Categories Logic
     categories = [
         ("Browsers", browsers),
         ("Communication", comm_apps),
@@ -244,51 +279,68 @@ def main():
 
     for cat_name, pkg_list in categories:
         print_header()
+        print_section(cat_name)
+        
         available_pkgs = [p for p in pkg_list if not (p.is_aur and not aur_helper)]
         disabled_pkgs = [p for p in pkg_list if p.is_aur and not aur_helper]
 
-        table = Table(title=f"{cat_name}", border_style=C_DARK, header_style=C_PRIMARY)
-        table.add_column("Software", style=C_ACCENT, no_wrap=True, justify="center")
+        table = Table(box=box.ROUNDED, border_style=C_DARK, header_style=C_PRIMARY, show_lines=False)
+        table.add_column("Software", style=C_ACCENT)
         table.add_column("Source", style="cyan", justify="center")
         table.add_column("Description", style="white")
 
         for p in available_pkgs:
             source = "AUR" if p.is_aur else "Pacman"
             table.add_row(p.name, source, p.desc)
+        
         if disabled_pkgs:
-             table.add_row("[dim]Others[/dim]", "[dim]AUR[/dim]", f"[dim]({len(disabled_pkgs)} hidden)[/dim]")
+             table.add_row("[dim]Others[/dim]", "[dim]AUR[/dim]", f"[dim]({len(disabled_pkgs)} hidden - needs AUR helper)[/dim]")
 
         console.print(Align.center(table))
+        console.print()
         
         choices = [p.name for p in available_pkgs] + ["None"]
         selected_names = questionary.checkbox(f"Select {cat_name} to install:", choices=choices, instruction=" ").ask()
 
         if selected_names and "None" not in selected_names:
+            console.print()
+            # Separate lists to batch install Pacman packages nicely
+            pacman_queue = []
+            
             for name in selected_names:
                 pkg = next((p for p in available_pkgs if p.name == name), None)
                 if pkg:
                     if pkg.is_aur and aur_helper:
-                        console.print(Align.center(f"Installing {pkg.name} (AUR)..."))
+                        console.print(f"   [cyan]➤[/cyan] Installing [bold]{pkg.name}[/bold] (AUR)...")
                         install_aur_package(pkg.pkg_name, aur_helper)
                     else:
-                        console.print(Align.center(f"Installing {pkg.name} (Pacman)..."))
-                        install_pacman_packages([pkg.pkg_name])
+                        pacman_queue.append(pkg.pkg_name)
+            
+            # Install all selected pacman packages for this category in one go with animation
+            if pacman_queue:
+                install_pacman_packages(pacman_queue, f"Installing {len(pacman_queue)} packages...")
+            
+            time.sleep(0.5)
 
-    # 5. Shell
+    # 5. Shell Selection
     print_header()
-    s_table = Table(title="Shell Selection", border_style=C_DARK, header_style=C_PRIMARY)
-    s_table.add_column("Shell", style=C_ACCENT, justify="center")
-    s_table.add_column("Description", justify="center")
+    print_section("Choose a shell")
+    
+    s_table = Table(box=box.ROUNDED, border_style=C_DARK, header_style=C_PRIMARY)
+    s_table.add_column("Shell", style=C_ACCENT)
+    s_table.add_column("Description")
     for s in shells: s_table.add_row(s.name, s.desc)
     console.print(Align.center(s_table))
+    console.print()
 
     shell_choice = questionary.select("Which shell should be the default?", choices=[s.name for s in shells]).ask()
     if shell_choice:
         sel_shell = next(s for s in shells if s.name == shell_choice)
-        install_pacman_packages([sel_shell.pkg_name])
+        install_pacman_packages([sel_shell.pkg_name], f"Installing {sel_shell.name}...")
+        
         if shell_choice == "Oh My Zsh":
             console.print(Align.center("Installing Oh My Zsh..."))
-            install_pacman_packages(["zsh", "curl", "git"])
+            install_pacman_packages(["zsh", "curl", "git"], "Installing deps...")
             os.system('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended')
             try: subprocess.run(["chsh", "-s", "/bin/zsh", os.environ.get("USER", "")])
             except: console.print(Align.center("[red]Could not auto-change shell. Do it manually.[/red]"))
@@ -297,49 +349,37 @@ def main():
             try: subprocess.run(["chsh", "-s", bin_path, os.environ.get("USER", "")])
             except: pass
 
-    # 6. Display Manager
+    # 6. Install guhwm
     print_header()
-    dm_table = Table(title="Display Managers", border_style=C_DARK, header_style=C_PRIMARY)
-    dm_table.add_column("Manager", style=C_ACCENT, justify="center")
-    dm_table.add_column("Description", justify="center")
-    for d in dms: dm_table.add_row(d.name, d.desc)
-    console.print(Align.center(dm_table))
-
-    dm_choice = questionary.select("Select a Login Manager:", choices=[d.name for d in dms] + ["None"]).ask()
-    if dm_choice != "None":
-        sel_dm = next(d for d in dms if d.name == dm_choice)
-        install_pacman_packages([sel_dm.pkg_name])
-        if sel_dm.name == "LightDM": install_pacman_packages(["lightdm-gtk-greeter"])
-        svc = sel_dm.service_name
-        console.print(Align.center(f"Enabling {svc} service..."))
-        os.system(f"sudo systemctl enable {svc}")
-
-    # 7. Install GUHWM
-    print_header()
-    console.print(Align.center(Text(f"Installing {REPO_NAME}...", style=C_PRIMARY)))
+    print_section(f"Installing {REPO_NAME}")
     
-    # FIX: DYNAMIC CLEANUP
     if os.path.exists(REPO_NAME):
-        console.print(Align.center(f"[yellow]Removing previous {REPO_NAME} directory...[/yellow]"))
+        console.print(Align.center(f"[yellow]Cleaning up previous installation...[/yellow]"))
         os.system(f"sudo rm -rf {REPO_NAME}")
+        time.sleep(1)
+        if os.path.exists(REPO_NAME):
+             console.print(Align.center(f"[{C_ERROR}]Error: Could not remove {REPO_NAME} folder. Manual intervention required.[/]"))
+             sys.exit(1)
     
-    run_cmd(["git", "clone", REPO_URL], show_output=True)
+    # Cloning doesn't get a spinner because it can prompt for credentials or show progress
+    run_cmd(["git", "clone", REPO_URL, REPO_NAME], show_output=True)
     
     if os.path.exists(REPO_NAME):
+        console.print()
+        
         # Configs
-        console.print(Align.center("Checking configuration files..."))
         install_config_file(f"{REPO_NAME}/picom.conf", "~/.config/picom", "picom.conf")
         install_config_file(f"{REPO_NAME}/config.rasi", "~/.config/rofi", "config.rasi")
         
         # Wallpapers
-        console.print(Align.center("Installing Wallpapers..."))
         os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
         if os.path.exists(f"{REPO_NAME}/Wallpapers"):
             os.system(f"sudo cp -r {REPO_NAME}/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
+            console.print(f" [green]✔[/green] [dim]Installed Wallpapers[/dim]")
 
         # Mod Key
         print_header()
-        center_print(Text("Modifier Key Selection", style=C_PRIMARY))
+        print_section("Configuration")
         mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
         if "Windows" in mod_choice:
             console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
@@ -350,89 +390,92 @@ def main():
                 with open(c_path, 'w') as f: f.write(c)
 
         # Compilation
-        console.print(Align.center(Text("Compiling guhwm...", style=C_PRIMARY)))
-        console.print(Align.center("[dim]Output is enabled to debug compilation errors.[/dim]"))
+        print_section("Compilation")
         
         targets = ["dwm", "slstatus"]
         for target in targets:
             t_path = os.path.join(REPO_NAME, target)
             if os.path.exists(t_path):
-                console.print(Align.center(f"Compiling {target}..."))
+                console.print(f"   [cyan]➤[/cyan] Compiling [bold]{target}[/bold]...")
                 
-                # Auto-Patch config.mk
+                # Patch config.mk (MANDATORY for Arch Linux X11 paths)
                 config_mk = os.path.join(t_path, "config.mk")
                 if os.path.exists(config_mk):
                     try:
                         with open(config_mk, "r") as f: mk_data = f.read()
+                        # Standard Arch paths are /usr/include and /usr/lib
                         mk_data = mk_data.replace("/usr/X11R6/include", "/usr/include")
                         mk_data = mk_data.replace("/usr/X11R6/lib", "/usr/lib")
                         if "/usr/include/freetype2" not in mk_data:
                             mk_data = mk_data.replace("FREETYPEINC = /usr/include", "FREETYPEINC = /usr/include/freetype2")
-                        mk_data = mk_data.replace("PREFIX = /usr/local", "PREFIX = /usr")
                         with open(config_mk, "w") as f: f.write(mk_data)
-                        console.print(Align.center("[green]Patched config.mk for Arch Linux paths.[/green]"))
-                    except Exception as e:
-                        console.print(Align.center(f"[red]Warning: Could not patch config.mk: {e}[/red]"))
+                    except: pass
 
                 os.chdir(t_path)
-                
-                # Clean, Build, Install
-                exit_code = os.system("sudo make PREFIX=/usr clean install")
+                # We hide output here unless error, to keep it looking clean
+                exit_code = os.system("sudo make clean install > /dev/null 2>&1")
                 
                 if exit_code != 0:
-                    console.print(Align.center(f"[bold red]CRITICAL ERROR: Failed to compile {target}.[/bold red]"))
-                    console.print(Align.center("[red]See the error output above. Exiting.[/red]"))
+                    console.print(Align.center(f"[{C_ERROR}]CRITICAL ERROR: Failed to compile {target}.[/]"))
+                    console.print(Align.center("[red]Dependencies might be missing. Re-running with output:[/red]"))
+                    os.system("sudo make clean install") # Run again with output
                     sys.exit(1)
                     
                 os.chdir("../..")
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # Verify Installation
-        if not os.path.exists("/usr/bin/dwm"):
-             console.print(Align.center(Text("[CRITICAL] dwm binary not found in /usr/bin. Compilation failed.", style="bold red")))
-             sys.exit(1)
-
-        # Session Script
-        console.print(Align.center("Creating session startup script..."))
+        # .xinitrc creation
+        console.print(Align.center("\n[dim]Configuring startup...[/dim]"))
+        xinitrc_path = os.path.expanduser("~/.xinitrc")
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
-        session_script = f"""#!/bin/sh
-# --- guhwm session ---
-/usr/bin/feh --bg-fill {wall_path} &
-/usr/bin/picom -b &
-/usr/bin/slstatus &
-exec /usr/bin/dwm
-"""
-        with open("guhwm-session", "w") as f: f.write(session_script)
-        os.system("sudo mv guhwm-session /usr/bin/guhwm-session")
-        os.system("sudo chmod +x /usr/bin/guhwm-session")
+        xinit_content = f"""#!/bin/sh
+# =======================================================
+# --- guhwm .xinitrc ------------------------------------
+# =======================================================
 
-        # Desktop Entry
-        desktop_entry = """[Desktop Entry]
-Encoding=UTF-8
-Name=guhwm
-Comment=Guh Window Manager
-Exec=/usr/bin/guhwm-session
-Icon=guhwm
-Type=Application
+# === Default wallpaper (using feh) =====================
+feh --bg-fill {wall_path} &
+
+# === Picom =============================================
+picom -b &
+
+# === slstatus ==========================================
+slstatus &
+
+# === Keyboard Layout Switching =========================
+# Uncomment and adjust the next line to enable multiple layouts
+# Example: US English, Bulgarian Traditional phonetic, Arabic Macintosh phonetic
+
+# setxkbmap -layout "us,bg,ara" -variant ",phonetic,mac-phonetic" -option "grp:ctrl_space_toggle" &
+
+exec dwm
 """
-        with open("guhwm.desktop", "w") as f: f.write(desktop_entry)
-        os.system("sudo mv guhwm.desktop /usr/share/xsessions/")
+        if os.path.exists(xinitrc_path):
+            if questionary.confirm(f".xinitrc already exists. Overwrite?").ask():
+                shutil.copy(xinitrc_path, f"{xinitrc_path}.bak")
+                with open(xinitrc_path, "w") as f: f.write(xinit_content)
+        else:
+            with open(xinitrc_path, "w") as f: f.write(xinit_content)
         
-        console.print(Align.center(Text("✔ guhwm installed successfully.", style="green")))
+        os.system(f"chmod +x {xinitrc_path}")
+        
     else:
-        console.print(Align.center(Text("Failed to clone repository.", style="red")))
+        console.print(Align.center(f"[{C_ERROR}]Failed to clone repository.[/]"))
 
     # 8. Finish
     print_header()
-    final_text = Text("\nInstallation Complete!\n\nguhwm and your selected applications are installed.\n", justify="center", style="bold green")
-    console.print(Align.center(Panel(final_text, border_style="green", expand=False)))
+    
+    success_msg = Text("\nInstallation Complete!\n", style="bold green", justify="center")
+    success_msg.append("\nType 'startx' to launch guhwm.\n", style="white")
+    
+    console.print(Align.center(Panel(success_msg, border_style="green", box=box.DOUBLE, padding=1)))
     
     if questionary.confirm("Do you want to reboot now?").ask():
         os.system("sudo reboot")
     else:
-        console.print("Exiting installer...")
+        console.print("\n[dim]Exiting installer...[/dim]")
 
 if __name__ == "__main__":
     try:
