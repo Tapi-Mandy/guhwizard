@@ -68,10 +68,6 @@ class Pkg:
 
 # --- Utilities ---
 def run_cmd(cmd, shell=False, show_output=False):
-    """
-    Executes a command.
-    If show_output is True, stdout/stderr are shown to the user.
-    """
     try:
         if show_output:
             subprocess.check_call(cmd, shell=shell)
@@ -148,7 +144,6 @@ def setup_aur_helper(choice):
 
 # --- Categories ---
 
-# Added imlib2, libx11, libxinerama, libxft expressly to ensure compilation
 base_pkgs = [
     "xorg", "xorg-xinit", "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
     "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "alsa-utils", 
@@ -215,9 +210,7 @@ def main():
     center_print(Text("Base Packages", style=C_PRIMARY))
     console.print(Align.center("[dim]Installing base packages via pacman...[/dim]"))
     print() 
-    
     install_pacman_packages(base_pkgs)
-    
     print()
     center_print(Text("✔ Base packages installed.", style="green"))
     time.sleep(2)
@@ -227,7 +220,6 @@ def main():
     welcome_text = Text("Welcome to the guhwm installer.\nThis will set up your environment, install applications, and configure the window manager.", justify="center")
     welcome_text.stylize(C_ACCENT)
     console.print(Panel(Align.center(welcome_text), border_style=C_DARK, title="Welcome", title_align="center"))
-    
     if not questionary.confirm("Ready to proceed?").ask():
         sys.exit()
 
@@ -235,12 +227,7 @@ def main():
     print_header()
     center_print(Text("AUR Helper Selection", style=C_PRIMARY))
     center_print(Text("Required for Brave, Vesktop, Waypaper, etc.", style="dim"))
-    
-    aur_choice = questionary.select(
-        "Choose an AUR helper to install/use:",
-        choices=["Yay", "Paru", "None"]
-    ).ask()
-
+    aur_choice = questionary.select("Choose an AUR helper:", choices=["Yay", "Paru", "None"]).ask()
     aur_helper = setup_aur_helper(aur_choice)
 
     # 4. Categories Logic
@@ -254,15 +241,8 @@ def main():
 
     for cat_name, pkg_list in categories:
         print_header()
-        
-        available_pkgs = []
-        disabled_pkgs = []
-        
-        for p in pkg_list:
-            if p.is_aur and not aur_helper:
-                disabled_pkgs.append(p)
-            else:
-                available_pkgs.append(p)
+        available_pkgs = [p for p in pkg_list if not (p.is_aur and not aur_helper)]
+        disabled_pkgs = [p for p in pkg_list if p.is_aur and not aur_helper]
 
         table = Table(title=f"{cat_name}", border_style=C_DARK, header_style=C_PRIMARY)
         table.add_column("Software", style=C_ACCENT, no_wrap=True, justify="center")
@@ -272,20 +252,13 @@ def main():
         for p in available_pkgs:
             source = "AUR" if p.is_aur else "Pacman"
             table.add_row(p.name, source, p.desc)
-        
         if disabled_pkgs:
              table.add_row("[dim]Others[/dim]", "[dim]AUR[/dim]", f"[dim]({len(disabled_pkgs)} hidden)[/dim]")
 
         console.print(Align.center(table))
         
-        choices = [p.name for p in available_pkgs]
-        choices.append("None")
-
-        selected_names = questionary.checkbox(
-            f"Select {cat_name} to install:",
-            choices=choices,
-            instruction=" "
-        ).ask()
+        choices = [p.name for p in available_pkgs] + ["None"]
+        selected_names = questionary.checkbox(f"Select {cat_name} to install:", choices=choices, instruction=" ").ask()
 
         if selected_names and "None" not in selected_names:
             for name in selected_names:
@@ -307,29 +280,20 @@ def main():
         s_table.add_row(s.name, s.desc)
     console.print(Align.center(s_table))
 
-    shell_choice = questionary.select(
-        "Which shell should be the default?",
-        choices=[s.name for s in shells]
-    ).ask()
-
+    shell_choice = questionary.select("Which shell should be the default?", choices=[s.name for s in shells]).ask()
     if shell_choice:
         sel_shell = next(s for s in shells if s.name == shell_choice)
         install_pacman_packages([sel_shell.pkg_name])
-
         if shell_choice == "Oh My Zsh":
             console.print(Align.center("Installing Oh My Zsh..."))
             install_pacman_packages(["zsh", "curl", "git"])
             os.system('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended')
-            try:
-                subprocess.run(["chsh", "-s", "/bin/zsh", os.environ.get("USER", "")])
-            except:
-                console.print(Align.center("[red]Could not auto-change shell. Do it manually.[/red]"))
+            try: subprocess.run(["chsh", "-s", "/bin/zsh", os.environ.get("USER", "")])
+            except: console.print(Align.center("[red]Could not auto-change shell. Do it manually.[/red]"))
         else:
             bin_path = f"/bin/{sel_shell.pkg_name}"
-            try:
-                subprocess.run(["chsh", "-s", bin_path, os.environ.get("USER", "")])
-            except:
-                pass
+            try: subprocess.run(["chsh", "-s", bin_path, os.environ.get("USER", "")])
+            except: pass
 
     # 6. Login Manager
     print_header()
@@ -341,14 +305,10 @@ def main():
     console.print(Align.center(dm_table))
 
     dm_choice = questionary.select("Select a Login Manager:", choices=[d.name for d in dms] + ["None"]).ask()
-
     if dm_choice != "None":
         sel_dm = next(d for d in dms if d.name == dm_choice)
         install_pacman_packages([sel_dm.pkg_name])
-        
-        if sel_dm.name == "LightDM":
-            install_pacman_packages(["lightdm-gtk-greeter"])
-        
+        if sel_dm.name == "LightDM": install_pacman_packages(["lightdm-gtk-greeter"])
         svc = sel_dm.service_name
         console.print(Align.center(f"Enabling {svc} service..."))
         os.system(f"sudo systemctl enable {svc}")
@@ -357,52 +317,37 @@ def main():
     print_header()
     console.print(Align.center(Text("Installing guhwm...", style=C_PRIMARY)))
     
-    # === FIX: FORCE CLEANUP OF OLD REPO ===
     if os.path.exists("guhwm"):
         console.print(Align.center("[yellow]Removing previous installation files...[/yellow]"))
-        # Using sudo to remove potential root-owned files from failed makes
         os.system("sudo rm -rf guhwm")
     
     run_cmd(["git", "clone", REPO_URL], show_output=True)
     
     if os.path.exists("guhwm"):
-        
-        # --- Config Files Check ---
+        # Configs
         console.print(Align.center("Checking configuration files..."))
         install_config_file("guhwm/picom.conf", "~/.config/picom", "picom.conf")
         install_config_file("guhwm/config.rasi", "~/.config/rofi", "config.rasi")
         
-        # --- Wallpapers ---
+        # Wallpapers
         console.print(Align.center("Installing Wallpapers..."))
         os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
         if os.path.exists("guhwm/Wallpapers"):
             os.system("sudo cp -r guhwm/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
 
-        # --- Mod Key Selection ---
+        # Mod Key
         print_header()
         center_print(Text("Modifier Key Selection", style=C_PRIMARY))
-        mod_choice = questionary.select(
-            "Which key would you like to use as the 'Mod' key?",
-            choices=[
-                "Alt (Default, recommended / Mod1)", 
-                "Windows/Super (Mod4)"
-            ]
-        ).ask()
-
+        mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
         if "Windows" in mod_choice:
-            console.print(Align.center("[yellow]Applying Windows/Super key to config...[/yellow]"))
-            config_path = "guhwm/dwm/config.def.h"
-            if os.path.exists(config_path):
-                # Read
-                with open(config_path, 'r') as f:
-                    content = f.read()
-                # Replace
-                content = content.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
-                # Write
-                with open(config_path, 'w') as f:
-                    f.write(content)
+            console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
+            c_path = "guhwm/dwm/config.def.h"
+            if os.path.exists(c_path):
+                with open(c_path, 'r') as f: c = f.read()
+                c = c.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
+                with open(c_path, 'w') as f: f.write(c)
 
-        # --- Compilation (WITH CONFIG.MK FIX & VISIBLE OUTPUT) ---
+        # Compilation
         console.print(Align.center(Text("Compiling guhwm...", style=C_PRIMARY)))
         console.print(Align.center("[dim]Output is enabled to debug compilation errors.[/dim]"))
         
@@ -418,27 +363,20 @@ def main():
                     try:
                         with open(config_mk, "r") as f:
                             mk_data = f.read()
-                        
-                        # Replace generic X11 paths with Arch paths
                         mk_data = mk_data.replace("/usr/X11R6/include", "/usr/include")
                         mk_data = mk_data.replace("/usr/X11R6/lib", "/usr/lib")
-                        
-                        # Ensure Freetype paths are correct (often missing /usr/include/freetype2)
                         if "/usr/include/freetype2" not in mk_data:
                             mk_data = mk_data.replace("FREETYPEINC = /usr/include", "FREETYPEINC = /usr/include/freetype2")
-                        
                         # Force PREFIX
                         mk_data = mk_data.replace("PREFIX = /usr/local", "PREFIX = /usr")
-                        
-                        with open(config_mk, "w") as f:
-                            f.write(mk_data)
+                        with open(config_mk, "w") as f: f.write(mk_data)
                         console.print(Align.center("[green]Patched config.mk for Arch Linux paths.[/green]"))
                     except Exception as e:
                         console.print(Align.center(f"[red]Warning: Could not patch config.mk: {e}[/red]"))
 
                 os.chdir(t_path)
                 
-                # Clean, Build, Install (With explicit output)
+                # Clean, Build, Install
                 exit_code = os.system("sudo make PREFIX=/usr clean install")
                 
                 if exit_code != 0:
@@ -455,34 +393,22 @@ def main():
              console.print(Align.center(Text("[CRITICAL] dwm binary not found in /usr/bin. Compilation failed.", style="bold red")))
              sys.exit(1)
 
-        # --- Session Script ---
+        # Session Script
         console.print(Align.center("Creating session startup script..."))
-        
         wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
-        # Absolute paths
         session_script = f"""#!/bin/sh
 # --- guhwm session ---
-
-# 1. Set Wallpaper (Default)
 /usr/bin/feh --bg-fill {wall_path} &
-
-# 2. Start Compositor (Picom)
 /usr/bin/picom -b &
-
-# 3. Start Status Bar
 /usr/bin/slstatus &
-
-# 4. Start Window Manager (Must be last with exec)
 exec /usr/bin/dwm
 """
-        with open("guhwm-session", "w") as f:
-            f.write(session_script)
-            
+        with open("guhwm-session", "w") as f: f.write(session_script)
         os.system("sudo mv guhwm-session /usr/bin/guhwm-session")
         os.system("sudo chmod +x /usr/bin/guhwm-session")
 
-        # Create .desktop file
+        # Desktop Entry
         desktop_entry = """[Desktop Entry]
 Encoding=UTF-8
 Name=guhwm
@@ -491,9 +417,7 @@ Exec=/usr/bin/guhwm-session
 Icon=guhwm
 Type=Application
 """
-        with open("guhwm.desktop", "w") as f:
-            f.write(desktop_entry)
-        
+        with open("guhwm.desktop", "w") as f: f.write(desktop_entry)
         os.system("sudo mv guhwm.desktop /usr/share/xsessions/")
         
         console.print(Align.center(Text("✔ guhwm installed successfully.", style="green")))
