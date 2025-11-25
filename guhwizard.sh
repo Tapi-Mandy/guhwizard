@@ -47,7 +47,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 import questionary
 
 # --- Configuration ---
+# NOTE: If you change this URL, the script will automatically adapt to the new folder name.
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
+REPO_NAME = REPO_URL.split("/")[-1].replace(".git", "")
+
 console = Console()
 
 # --- Colors & Styles (Midnight Rose Theme) ---
@@ -230,7 +233,7 @@ def main():
     aur_choice = questionary.select("Choose an AUR helper:", choices=["Yay", "Paru", "None"]).ask()
     aur_helper = setup_aur_helper(aur_choice)
 
-    # 4. Categories Logic
+    # 4. Categories
     categories = [
         ("Browsers", browsers),
         ("Communication", comm_apps),
@@ -271,13 +274,12 @@ def main():
                         console.print(Align.center(f"Installing {pkg.name} (Pacman)..."))
                         install_pacman_packages([pkg.pkg_name])
 
-    # 5. Shell Selection
+    # 5. Shell
     print_header()
     s_table = Table(title="Shell Selection", border_style=C_DARK, header_style=C_PRIMARY)
     s_table.add_column("Shell", style=C_ACCENT, justify="center")
     s_table.add_column("Description", justify="center")
-    for s in shells:
-        s_table.add_row(s.name, s.desc)
+    for s in shells: s_table.add_row(s.name, s.desc)
     console.print(Align.center(s_table))
 
     shell_choice = questionary.select("Which shell should be the default?", choices=[s.name for s in shells]).ask()
@@ -295,13 +297,12 @@ def main():
             try: subprocess.run(["chsh", "-s", bin_path, os.environ.get("USER", "")])
             except: pass
 
-    # 6. Login Manager
+    # 6. Display Manager
     print_header()
     dm_table = Table(title="Display Managers", border_style=C_DARK, header_style=C_PRIMARY)
     dm_table.add_column("Manager", style=C_ACCENT, justify="center")
     dm_table.add_column("Description", justify="center")
-    for d in dms:
-        dm_table.add_row(d.name, d.desc)
+    for d in dms: dm_table.add_row(d.name, d.desc)
     console.print(Align.center(dm_table))
 
     dm_choice = questionary.select("Select a Login Manager:", choices=[d.name for d in dms] + ["None"]).ask()
@@ -313,27 +314,28 @@ def main():
         console.print(Align.center(f"Enabling {svc} service..."))
         os.system(f"sudo systemctl enable {svc}")
 
-    # 7. Install guhwm
+    # 7. Install GUHWM
     print_header()
-    console.print(Align.center(Text("Installing guhwm...", style=C_PRIMARY)))
+    console.print(Align.center(Text(f"Installing {REPO_NAME}...", style=C_PRIMARY)))
     
-    if os.path.exists("guhwm"):
-        console.print(Align.center("[yellow]Removing previous installation files...[/yellow]"))
-        os.system("sudo rm -rf guhwm")
+    # FIX: DYNAMIC CLEANUP
+    if os.path.exists(REPO_NAME):
+        console.print(Align.center(f"[yellow]Removing previous {REPO_NAME} directory...[/yellow]"))
+        os.system(f"sudo rm -rf {REPO_NAME}")
     
     run_cmd(["git", "clone", REPO_URL], show_output=True)
     
-    if os.path.exists("guhwm"):
+    if os.path.exists(REPO_NAME):
         # Configs
         console.print(Align.center("Checking configuration files..."))
-        install_config_file("guhwm/picom.conf", "~/.config/picom", "picom.conf")
-        install_config_file("guhwm/config.rasi", "~/.config/rofi", "config.rasi")
+        install_config_file(f"{REPO_NAME}/picom.conf", "~/.config/picom", "picom.conf")
+        install_config_file(f"{REPO_NAME}/config.rasi", "~/.config/rofi", "config.rasi")
         
         # Wallpapers
         console.print(Align.center("Installing Wallpapers..."))
         os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
-        if os.path.exists("guhwm/Wallpapers"):
-            os.system("sudo cp -r guhwm/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
+        if os.path.exists(f"{REPO_NAME}/Wallpapers"):
+            os.system(f"sudo cp -r {REPO_NAME}/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
 
         # Mod Key
         print_header()
@@ -341,7 +343,7 @@ def main():
         mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
         if "Windows" in mod_choice:
             console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
-            c_path = "guhwm/dwm/config.def.h"
+            c_path = f"{REPO_NAME}/dwm/config.def.h"
             if os.path.exists(c_path):
                 with open(c_path, 'r') as f: c = f.read()
                 c = c.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
@@ -353,21 +355,19 @@ def main():
         
         targets = ["dwm", "slstatus"]
         for target in targets:
-            t_path = os.path.join("guhwm", target)
+            t_path = os.path.join(REPO_NAME, target)
             if os.path.exists(t_path):
                 console.print(Align.center(f"Compiling {target}..."))
                 
-                # --- AUTO-PATCH config.mk for Arch Linux ---
+                # Auto-Patch config.mk
                 config_mk = os.path.join(t_path, "config.mk")
                 if os.path.exists(config_mk):
                     try:
-                        with open(config_mk, "r") as f:
-                            mk_data = f.read()
+                        with open(config_mk, "r") as f: mk_data = f.read()
                         mk_data = mk_data.replace("/usr/X11R6/include", "/usr/include")
                         mk_data = mk_data.replace("/usr/X11R6/lib", "/usr/lib")
                         if "/usr/include/freetype2" not in mk_data:
                             mk_data = mk_data.replace("FREETYPEINC = /usr/include", "FREETYPEINC = /usr/include/freetype2")
-                        # Force PREFIX
                         mk_data = mk_data.replace("PREFIX = /usr/local", "PREFIX = /usr")
                         with open(config_mk, "w") as f: f.write(mk_data)
                         console.print(Align.center("[green]Patched config.mk for Arch Linux paths.[/green]"))
