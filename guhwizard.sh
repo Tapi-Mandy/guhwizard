@@ -176,6 +176,30 @@ def install_tool_from_source(name, repo, build_cmds, is_sudo_install=True):
         console.print(f"   [{C_ERROR}]✖ Failed to install {name}: {e}[/]")
         return False
 
+def install_config_file(src_path, dest_dir, file_name):
+    if not os.path.exists(src_path): return
+    full_dest_dir = os.path.expanduser(dest_dir)
+    full_dest_path = os.path.join(full_dest_dir, file_name)
+    os.makedirs(full_dest_dir, exist_ok=True)
+    
+    status_icon = ""
+    status_text = ""
+    
+    if os.path.exists(full_dest_path):
+        if questionary.confirm(f"Config file '{file_name}' already exists in {dest_dir}. Overwrite?").ask():
+            shutil.copy(src_path, full_dest_path)
+            status_icon = "[yellow]![/yellow]"
+            status_text = f"[dim]Overwrote {file_name}[/dim]"
+        else:
+            status_icon = "[dim]-[/dim]"
+            status_text = f"[dim]Skipped {file_name}[/dim]"
+    else:
+        shutil.copy(src_path, full_dest_path)
+        status_icon = "[green]✔[/green]"
+        status_text = f"[dim]Installed {file_name}[/dim]"
+        
+    console.print(f" {status_icon} {status_text}")
+
 # --- Categories ---
 
 base_pkgs = [
@@ -186,7 +210,7 @@ base_pkgs = [
     "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
 
     # Core
-    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "npm", "nodejs",
+    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "npm", "nodejs", "sxhkd",
 
     # Audio
     "alsa-utils",
@@ -355,8 +379,13 @@ def main():
     # pino
     install_tool_from_source("pino", "https://github.com/Pixel2175/pino", ["python install.py"])
     
-    # guhwall
-    install_tool_from_source("guhwall", "https://github.com/Tapi-Mandy/guhwall.git", ["npm install", "sudo make all"])
+    # guhwall (Installed via curl script)
+    console.print(f"   [cyan]➤[/cyan] Installing [bold]guhwall[/bold]...", style="dim")
+    exit_code = os.system("curl -sS https://raw.githubusercontent.com/Tapi-Mandy/guhwall/main/install.sh | bash > /dev/null 2>&1")
+    if exit_code == 0:
+        console.print(f"   [{C_SUCCESS}]✔ guhwall installed.[/]")
+    else:
+        console.print(f"   [{C_ERROR}]✖ Failed to install guhwall[/]")
 
     # 7. Install guhwm
     print_header()
@@ -375,6 +404,10 @@ def main():
     if os.path.exists(CONFIG_DIR):
         console.print()
         
+        # Configs (Moved to their own folders per request)
+        install_config_file(f"{CONFIG_DIR}/picom.conf", "~/.config/picom", "picom.conf")
+        install_config_file(f"{CONFIG_DIR}/config.rasi", "~/.config/rofi", "config.rasi")
+        
         # Wallpapers (Copy to system and keep in config)
         os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
         if os.path.exists(f"{CONFIG_DIR}/Wallpapers"):
@@ -384,14 +417,36 @@ def main():
         # Mod Key
         print_header()
         print_section("Configuration")
-        mod_choice = questionary.select("Which key should be the 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
+        mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
+        
+        # Determine sxhkd modifier
+        sxhkd_mod = "super" # default assumption for windows key
+        
         if "Windows" in mod_choice:
             console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
+            sxhkd_mod = "super"
             c_path = f"{CONFIG_DIR}/dwm/config.def.h"
             if os.path.exists(c_path):
                 with open(c_path, 'r') as f: c = f.read()
                 c = c.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
                 with open(c_path, 'w') as f: f.write(c)
+        else:
+            sxhkd_mod = "alt"
+
+        # Generate sxhkdrc
+        console.print(Align.center("[dim]Generating sxhkdrc...[/dim]"))
+        sxhkd_dir = os.path.expanduser("~/.config/sxhkd")
+        if not os.path.exists(sxhkd_dir): os.makedirs(sxhkd_dir)
+        with open(os.path.join(sxhkd_dir, "sxhkdrc"), "w") as f:
+            f.write(f"""# Mod + Shift + s: Screenshot to Clipboard
+{sxhkd_mod} + shift + s
+    ~/.local/bin/xsnap copy
+
+# Mod + Shift + a: Screenshot to Google Lens
+{sxhkd_mod} + shift + a
+    ~/.local/bin/xsnap lens
+""")
+        console.print(f" [green]✔[/green] [dim]Configured sxhkd[/dim]")
 
         # Salah (Prayer Times)
         if questionary.confirm("Enable Salah (Prayer Times) in the bar?").ask():
@@ -443,11 +498,25 @@ def main():
         # .xinitrc creation
         console.print(Align.center("\n[dim]Configuring startup...[/dim]"))
         xinitrc_path = os.path.expanduser("~/.xinitrc")
+        wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
         xinit_content = f"""#!/bin/sh
 # =======================================================
 # --- guhwm .xinitrc ------------------------------------
 # =======================================================
+
+# === guhwall First Run =================================
+# Launches guhwall GUI only on the very first startup
+if [ ! -f ~/.cache/guhwall_first_run ]; then
+    mkdir -p ~/.cache
+    touch ~/.cache/guhwall_first_run
+    # Run guhwall in background so it doesn't block DWM
+    guhwall &
+fi
+
+# === Default Wallpaper (Fallback) ======================
+# Uses feh just in case guhwall hasn't set one yet
+feh --bg-fill {wall_path} &
 
 # === Compositor ========================================
 # picom -b &
@@ -470,7 +539,7 @@ if command -v redshift >/dev/null 2>&1; then
   fi
 fi
 
-# === guhwall ===========================================
+# === guhwall Restore ===================================
 # Restore the Color Scheme
 walrs -R &
 
@@ -478,19 +547,7 @@ walrs -R &
 # guhwall uses 'feh' to stretch the image, which saves a restore script here:
 sh ~/.fehbg &
 
-# --- First Run ---------------------------------
-# Launches guhwall only on the very first startup
-if [ ! -f ~/.cache/guhwall_first_run ]; then
-    mkdir -p ~/.cache
-    touch ~/.cache/guhwall_first_run
-    # Run guhwall in the background
-    guhwall &
-fi
-
 # === Keyboard Layouts ==================================
-# Uncomment and adjust the next line to enable multiple layouts
-# Example: US English, Bulgarian Traditional phonetic, Arabic Macintosh phonetic
-
 # setxkbmap -layout "us,bg,ara" -variant ",phonetic,mac-phonetic" -option "grp:ctrl_space_toggle" &
 
 exec dwm
