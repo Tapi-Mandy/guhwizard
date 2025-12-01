@@ -1,6 +1,7 @@
 #!/bin/bash
+
 # ===============================================================
-# --- GUHWIZARD -------------------------------------------------
+# --- guhwizard -------------------------------------------------
 # ===============================================================
 
 # Colors (Midnight Rose Theme)
@@ -22,7 +23,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # 2. Dependencies
 echo -e "${MAGENTA}[*] Installing system dependencies...${NC}"
-sudo pacman -Sy --noconfirm python python-pip git base-devel > /dev/null 2>&1
+sudo pacman -Sy --noconfirm python python-pip git base-devel npm nodejs > /dev/null 2>&1
 
 # 3. TUI Libraries
 echo -e "${MAGENTA}[*] Setting up Python TUI libraries...${NC}"
@@ -48,7 +49,7 @@ import questionary
 
 # --- Configuration ---
 REPO_URL = "https://github.com/Tapi-Mandy/guhwm"
-REPO_NAME = REPO_URL.rstrip("/").split("/")[-1].replace(".git", "")
+CONFIG_DIR = os.path.expanduser("~/.config/guhwm")
 
 console = Console()
 
@@ -103,30 +104,6 @@ def print_section(title):
     console.rule(f"[{C_PRIMARY}]{title}[/]", style=C_DARK)
     console.print()
 
-def install_config_file(src_path, dest_dir, file_name):
-    if not os.path.exists(src_path): return
-    full_dest_dir = os.path.expanduser(dest_dir)
-    full_dest_path = os.path.join(full_dest_dir, file_name)
-    os.makedirs(full_dest_dir, exist_ok=True)
-    
-    status_icon = ""
-    status_text = ""
-    
-    if os.path.exists(full_dest_path):
-        if questionary.confirm(f"Config file '{file_name}' already exists. Overwrite?").ask():
-            shutil.copy(src_path, full_dest_path)
-            status_icon = "[yellow]![/yellow]"
-            status_text = f"[dim]Overwrote {file_name}[/dim]"
-        else:
-            status_icon = "[dim]-[/dim]"
-            status_text = f"[dim]Skipped {file_name}[/dim]"
-    else:
-        shutil.copy(src_path, full_dest_path)
-        status_icon = "[green]✔[/green]"
-        status_text = f"[dim]Installed {file_name}[/dim]"
-        
-    console.print(f" {status_icon} {status_text}")
-
 # --- Core Logic ---
 
 def install_pacman_packages(packages, description="Installing packages..."):
@@ -168,21 +145,52 @@ def setup_aur_helper(choice):
         console.print(f"   [{C_ERROR}]✖[/] Failed to install {choice}", style="dim")
         return None
 
+# --- Tool Compilation Logic ---
+
+def install_tool_from_source(name, repo, build_cmds, is_sudo_install=True):
+    """Generic function to clone, build, and install a tool."""
+    console.print(f"   [cyan]➤[/cyan] Installing [bold]{name}[/bold]...", style="dim")
+    build_dir = os.path.expanduser(f"~/guh_build_{name.lower()}")
+    
+    if os.path.exists(build_dir):
+        shutil.rmtree(build_dir)
+        
+    try:
+        # Clone
+        run_cmd(["git", "clone", repo, build_dir], show_output=False)
+        os.chdir(build_dir)
+        
+        # Run build commands
+        for cmd in build_cmds:
+            # Show output for build steps as they can take time/fail
+            console.print(f"      [dim]Running: {cmd}[/dim]")
+            exit_code = os.system(f"{cmd} > /dev/null 2>&1")
+            if exit_code != 0:
+                raise Exception(f"Command failed: {cmd}")
+                
+        os.chdir(os.path.expanduser("~"))
+        shutil.rmtree(build_dir)
+        console.print(f"   [{C_SUCCESS}]✔ {name} installed.[/]")
+        return True
+    except Exception as e:
+        console.print(f"   [{C_ERROR}]✖ Failed to install {name}: {e}[/]")
+        return False
+
 # --- Categories ---
 
 base_pkgs = [
     # Essential X11 components
-    "xorg", "xorg-xinit", 
-    
-    # Compilation Libraries (CRITICAL for DWM)
+    "xorg", "xorg-xinit",
+
+    # Compilation Libraries
     "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
-    
+
     # Core
-    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq",
-    
+    "kitty", "picom", "rofi", "feh", "zip", "unzip", "jq", "npm", "nodejs",
+
     # Audio
-    "alsa-utils", 
-    
+    "alsa-utils",
+
     # Fonts
     "noto-fonts", "noto-fonts-cjk", "noto-fonts-emoji", "ttf-jetbrains-mono-nerd"
 ]
@@ -204,15 +212,12 @@ comm_apps = [
 
 dev_tools = [
     Pkg("Emacs", "Extensible, customizable text editor", "emacs"),
+    Pkg("Geany", "Flyweight IDE", "geany"),
     Pkg("Nano", "Simple terminal text editor", "nano"),
     Pkg("Neovim", "Fork of Vim aiming to improve user experience", "neovim"),
     Pkg("Sublime", "Sophisticated text editor for code", "sublime-text-4", is_aur=True),
     Pkg("Vim", "Vi iMproved, highly configurable text editor", "vim"),
     Pkg("VSCodium", "Free/Libre Open Source binary of VSCode", "vscodium-bin", is_aur=True),
-]
-
-wall_apps = [
-    Pkg("Waypaper", "GUI for wallpaper backends", "waypaper", is_aur=True)
 ]
 
 misc_apps = [
@@ -257,7 +262,7 @@ def main():
     # 3. AUR Helper
     print_header()
     print_section("AUR Helper")
-    console.print(Align.center("[dim]Required for many applications (Brave, Vesktop, Waypaper, etc.)[/dim]\n"))
+    console.print(Align.center("[dim]Required for many applications (Brave, Vesktop, etc.)[/dim]\n"))
     
     aur_choice = questionary.select("Choose an AUR helper:", choices=["Yay", "Paru", "None"]).ask()
     aur_helper = setup_aur_helper(aur_choice)
@@ -267,7 +272,6 @@ def main():
         ("Browsers", browsers),
         ("Communication", comm_apps),
         ("Developer Tools", dev_tools),
-        ("Wallpaper Manager", wall_apps),
         ("Miscellaneous Tools", misc_apps),
     ]
 
@@ -341,51 +345,72 @@ def main():
             try: subprocess.run(["chsh", "-s", bin_path, os.environ.get("USER", "")])
             except: pass
 
-    # 6. Install guhwm
+    # 6. Base Environment Tools Installation
     print_header()
-    print_section(f"Installing {REPO_NAME}")
+    print_section("Installing Base Environment Tools")
     
-    if os.path.exists(REPO_NAME):
-        console.print(Align.center(f"[yellow]Cleaning up previous installation...[/yellow]"))
-        os.system(f"sudo rm -rf {REPO_NAME}")
-        time.sleep(1)
-        if os.path.exists(REPO_NAME):
-             console.print(Align.center(f"[{C_ERROR}]Error: Could not remove {REPO_NAME} folder. Manual intervention required.[/]"))
-             sys.exit(1)
+    # xsnap
+    install_tool_from_source("xsnap", "https://github.com/w8z4rd/xsnap", ["sudo make install"])
     
-    run_cmd(["git", "clone", REPO_URL, REPO_NAME], show_output=True)
+    # pino
+    install_tool_from_source("pino", "https://github.com/Pixel2175/pino", ["python install.py"])
     
-    if os.path.exists(REPO_NAME):
+    # guhwall
+    install_tool_from_source("guhwall", "https://github.com/Tapi-Mandy/guhwall.git", ["npm install", "sudo make all"])
+
+    # 7. Install guhwm
+    print_header()
+    print_section(f"Installing guhwm")
+    
+    # Clone to ~/.config/guhwm
+    if os.path.exists(CONFIG_DIR):
+        console.print(Align.center(f"[yellow]Cleaning up previous installation at {CONFIG_DIR}...[/yellow]"))
+        os.system(f"sudo rm -rf {CONFIG_DIR}")
+    
+    # Ensure parent dir exists
+    os.makedirs(os.path.dirname(CONFIG_DIR), exist_ok=True)
+    
+    run_cmd(["git", "clone", REPO_URL, CONFIG_DIR], show_output=True)
+    
+    if os.path.exists(CONFIG_DIR):
         console.print()
         
-        # Configs
-        install_config_file(f"{REPO_NAME}/picom.conf", "~/.config/picom", "picom.conf")
-        install_config_file(f"{REPO_NAME}/config.rasi", "~/.config/rofi", "config.rasi")
-        
-        # Wallpapers
+        # Wallpapers (Copy to system and keep in config)
         os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
-        if os.path.exists(f"{REPO_NAME}/Wallpapers"):
-            os.system(f"sudo cp -r {REPO_NAME}/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
+        if os.path.exists(f"{CONFIG_DIR}/Wallpapers"):
+            os.system(f"sudo cp -r {CONFIG_DIR}/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
             console.print(f" [green]✔[/green] [dim]Installed Wallpapers[/dim]")
 
         # Mod Key
         print_header()
         print_section("Configuration")
-        mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
+        mod_choice = questionary.select("Which key should be the 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
         if "Windows" in mod_choice:
             console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
-            c_path = f"{REPO_NAME}/dwm/config.def.h"
+            c_path = f"{CONFIG_DIR}/dwm/config.def.h"
             if os.path.exists(c_path):
                 with open(c_path, 'r') as f: c = f.read()
                 c = c.replace("#define MODKEY Mod1Mask", "#define MODKEY Mod4Mask")
                 with open(c_path, 'w') as f: f.write(c)
+
+        # Salah (Prayer Times)
+        if questionary.confirm("Enable Salah (Prayer Times) in the bar?").ask():
+            console.print(Align.center("[yellow]Enabling Salah...[/yellow]"))
+            sl_script = f"{CONFIG_DIR}/slstatus/slstatus.sh"
+            if os.path.exists(sl_script):
+                try:
+                    with open(sl_script, 'r') as f: sl_content = f.read()
+                    sl_content = sl_content.replace("ENABLE_SALAH=0", "ENABLE_SALAH=1")
+                    with open(sl_script, 'w') as f: f.write(sl_content)
+                except Exception as e:
+                    console.print(Align.center(f"[red]Failed to enable Salah: {e}[/red]"))
 
         # Compilation
         print_section("Compilation")
         
         targets = ["dwm", "slstatus"]
         for target in targets:
-            t_path = os.path.join(REPO_NAME, target)
+            t_path = os.path.join(CONFIG_DIR, target)
             if os.path.exists(t_path):
                 console.print(f"   [cyan]➤[/cyan] Compiling [bold]{target}[/bold]...")
                 
@@ -411,30 +436,58 @@ def main():
                     os.system("sudo make clean install")
                     sys.exit(1)
                     
-                os.chdir("../..")
+                os.chdir(os.path.expanduser("~")) # Reset to safe dir
             else:
                 console.print(Align.center(f"[yellow]Warning: {target} folder not found.[/yellow]"))
 
-        # .xinitrc creation (SAFE MODE)
+        # .xinitrc creation
         console.print(Align.center("\n[dim]Configuring startup...[/dim]"))
         xinitrc_path = os.path.expanduser("~/.xinitrc")
-        wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
         xinit_content = f"""#!/bin/sh
 # =======================================================
 # --- guhwm .xinitrc ------------------------------------
 # =======================================================
 
-# === Default wallpaper (using feh) =====================
-feh --bg-fill {wall_path} &
+# === Compositor ========================================
+# picom -b &
 
-# === Picom =============================================
-picom -b &
-
-# === slstatus ==========================================
+# === Status Bar ========================================
 slstatus &
 
-# === Keyboard Layout Switching =========================
+# === Notification Daemon ===============================
+pino &
+
+# === Redshift ==========================================
+if command -v redshift >/dev/null 2>&1; then
+  TEMP=4000   # Recommended warm color temperature
+  if redshift -m randr -O $TEMP >/dev/null 2>&1; then
+    redshift -m randr -O $TEMP &
+  elif redshift -m vidmode -O $TEMP >/dev/null 2>&1; then
+    redshift -m vidmode -O $TEMP &
+  else
+    redshift -O $TEMP &
+  fi
+fi
+
+# === guhwall ===========================================
+# Restore the Color Scheme
+walrs -R &
+
+# Restore the Wallpaper Image
+# guhwall uses 'feh' to stretch the image, which saves a restore script here:
+sh ~/.fehbg &
+
+# --- First Run ---------------------------------
+# Launches guhwall only on the very first startup
+if [ ! -f ~/.cache/guhwall_first_run ]; then
+    mkdir -p ~/.cache
+    touch ~/.cache/guhwall_first_run
+    # Run guhwall in the background
+    guhwall &
+fi
+
+# === Keyboard Layouts ==================================
 # Uncomment and adjust the next line to enable multiple layouts
 # Example: US English, Bulgarian Traditional phonetic, Arabic Macintosh phonetic
 
