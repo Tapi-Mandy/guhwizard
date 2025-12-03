@@ -409,9 +409,9 @@ def main():
         install_config_file(f"{CONFIG_DIR}/config.rasi", "~/.config/rofi", "config.rasi")
         
         # Wallpapers (Copy to system and keep in config)
-        os.system("sudo mkdir -p /usr/share/backgrounds/guhwm_wallpapers")
+        os.system("sudo mkdir -p /usr/share/backgrounds/Wallpapers")
         if os.path.exists(f"{CONFIG_DIR}/Wallpapers"):
-            os.system(f"sudo cp -r {CONFIG_DIR}/Wallpapers/* /usr/share/backgrounds/guhwm_wallpapers/")
+            os.system(f"sudo cp -r {CONFIG_DIR}/Wallpapers/* /usr/share/backgrounds/Wallpapers/")
             console.print(f" [green]✔[/green] [dim]Installed Wallpapers[/dim]")
 
         # Mod Key
@@ -498,28 +498,14 @@ def main():
         # .xinitrc creation
         console.print(Align.center("\n[dim]Configuring startup...[/dim]"))
         xinitrc_path = os.path.expanduser("~/.xinitrc")
-        wall_path = "/usr/share/backgrounds/guhwm_wallpapers/guhwm_midnight-rose.jpg"
         
         xinit_content = f"""#!/bin/sh
 # =======================================================
 # --- guhwm .xinitrc ------------------------------------
 # =======================================================
 
-# === guhwall First Run =================================
-# Launches guhwall GUI only on the very first startup
-if [ ! -f ~/.cache/guhwall_first_run ]; then
-    mkdir -p ~/.cache
-    touch ~/.cache/guhwall_first_run
-    # Run guhwall in background so it doesn't block DWM
-    guhwall &
-fi
-
-# === Default Wallpaper (Fallback) ======================
-# Uses feh just in case guhwall hasn't set one yet
-feh --bg-fill {wall_path} &
-
 # === Compositor ========================================
-# picom -b &
+picom -b &
 
 # === Status Bar ========================================
 slstatus &
@@ -539,7 +525,7 @@ if command -v redshift >/dev/null 2>&1; then
   fi
 fi
 
-# === guhwall Restore ===================================
+# === guhwall ===========================================
 # Restore the Color Scheme
 walrs -R &
 
@@ -547,7 +533,19 @@ walrs -R &
 # guhwall uses 'feh' to stretch the image, which saves a restore script here:
 sh ~/.fehbg &
 
+# --- First Run ---------------------------------
+# Launches guhwall only on the very first startup
+if [ ! -f ~/.cache/guhwall_first_run ]; then
+    mkdir -p ~/.cache
+    touch ~/.cache/guhwall_first_run
+    # Run guhwall in the background
+    guhwall &
+fi
+
 # === Keyboard Layouts ==================================
+# Uncomment and adjust the next line to enable multiple layouts
+# Example: US English, Bulgarian Traditional phonetic, Arabic Macintosh phonetic
+
 # setxkbmap -layout "us,bg,ara" -variant ",phonetic,mac-phonetic" -option "grp:ctrl_space_toggle" &
 
 exec dwm
