@@ -455,8 +455,8 @@ def main():
 """)
         console.print(f" [green]✔[/green] [dim]Configured sxhkd[/dim]")
 
-        # Salah (Prayer Times)
-        if questionary.confirm("Enable Salah (Prayer Times) in the bar?").ask():
+        # Salah Times (Prayer Times)
+        if questionary.confirm("Enable Salah Times (Prayer Times) in the bar?").ask():
             console.print(Align.center("[yellow]Enabling Salah...[/yellow]"))
             sl_script = f"{CONFIG_DIR}/slstatus/slstatus.sh"
             if os.path.exists(sl_script):
