@@ -322,7 +322,11 @@ def main():
         console.print()
         
         choices = [p.name for p in available_pkgs] + ["None"]
-        selected_names = questionary.checkbox(f"Select {cat_name} to install:", choices=choices, instruction=" ").ask()
+        selected_names = questionary.checkbox(
+            f"Select {cat_name} to install:",
+            choices=choices,
+            instruction="(Press <space> to select, <enter> to proceed)"
+        ).ask()
 
         if selected_names and "None" not in selected_names:
             console.print()
@@ -381,8 +385,11 @@ def main():
     
     # guhwall (Installed via curl script)
     console.print(f"   [cyan]➤[/cyan] Installing [bold]guhwall[/bold]...", style="dim")
-    exit_code = os.system("curl -sS https://raw.githubusercontent.com/Tapi-Mandy/guhwall/main/install.sh | bash > /dev/null 2>&1")
-    if exit_code == 0:
+    # Silence output but verify success by checking if binary exists
+    os.system("curl -sS https://raw.githubusercontent.com/Tapi-Mandy/guhwall/main/install.sh | bash > /dev/null 2>&1")
+    
+    # Check if binary exists instead of relying on exit code to avoid false red text
+    if shutil.which("guhwall"):
         console.print(f"   [{C_SUCCESS}]✔ guhwall installed.[/]")
     else:
         console.print(f"   [{C_ERROR}]✖ Failed to install guhwall[/]")
@@ -417,13 +424,13 @@ def main():
         # Mod Key
         print_header()
         print_section("Configuration")
-        mod_choice = questionary.select("Which key as 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
+        mod_choice = questionary.select("Which key to set as the 'Mod' key?", choices=["Alt (Default / Mod1)", "Windows/Super (Mod4)"]).ask()
         
         # Determine sxhkd modifier
         sxhkd_mod = "super" # default assumption for windows key
         
         if "Windows" in mod_choice:
-            console.print(Align.center("[yellow]Applying Windows/Super key...[/yellow]"))
+            console.print(Align.center("[yellow]Applying the Windows/Super key...[/yellow]"))
             sxhkd_mod = "super"
             c_path = f"{CONFIG_DIR}/dwm/config.def.h"
             if os.path.exists(c_path):
