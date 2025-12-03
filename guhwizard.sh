@@ -555,7 +555,7 @@ fi
 
 # setxkbmap -layout "us,bg,ara" -variant ",phonetic,mac-phonetic" -option "grp:ctrl_space_toggle" &
 
-exec dwm
+exec dbus-run-session dwm
 """
         if os.path.exists(xinitrc_path):
             if questionary.confirm(f".xinitrc already exists. Overwrite?").ask():
