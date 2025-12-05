@@ -245,7 +245,7 @@ def install_polybar_config(config_dir):
 
 base_pkgs = [
     # Essential X11 components
-    "xorg", "xorg-xinit",
+    "xorg", "xorg-xinit", "fontconfig",
 
     # Compilation Libraries
     "libx11", "libxinerama", "libxft", "imlib2", "freetype2",
@@ -314,8 +314,14 @@ def main():
     
     install_pacman_packages(base_pkgs, "Installing base packages...")
     
-    run_cmd(["fc-cache", "-fv"], show_output=False)
-    
+    # Check if fc-cache exists before running, or catch the error
+try:
+    if shutil.which("fc-cache"):
+        run_cmd(["fc-cache", "-fv"], show_output=False)
+    else:
+        console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
+except Exception:
+    pass
     console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
     time.sleep(1.5)
 
