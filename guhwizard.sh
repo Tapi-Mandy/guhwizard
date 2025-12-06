@@ -305,13 +305,13 @@ shells = [
 ]
 
 # --- Main Execution ---
-
 def main():
     print_header()
 
     # 1. Install Base
     print_section("Base System")
     
+    # Updated to show output so errors (like GPG keys or conflicts) are visible
     install_pacman_packages(base_pkgs, "Installing base packages...")
     
     # Check if fc-cache exists before running, or catch the error
@@ -684,6 +684,24 @@ fi
         os.system("sudo reboot")
     else:
         console.print("\n[dim]Exiting installer...[/dim]")
+
+# =======================================================
+# --- Function Overrides --------------------------------
+# =======================================================
+
+# Re-implementing install_pacman_packages to show output and remove spinner
+def install_pacman_packages(packages, description="Installing packages..."):
+    if not packages: return
+    
+    console.print(f"\n[cyan]➤[/cyan] [bold white]{description}[/bold white]")
+    
+    # Run with show_output=True so we can see pacman's errors/progress
+    cmd = ["sudo", "pacman", "-S", "--noconfirm", "--needed"] + packages
+    success = run_cmd(cmd, show_output=True)
+    
+    if not success:
+        console.print(f"[{C_ERROR}]Error encountered during installation. See details above.[/]")
+        # We allow continuing, but the user is now aware
 
 if __name__ == "__main__":
     try:
