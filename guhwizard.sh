@@ -315,14 +315,14 @@ def main():
     install_pacman_packages(base_pkgs, "Installing base packages...")
     
     # Check if fc-cache exists before running, or catch the error
-	try:
-		if shutil.which("fc-cache"):
+    try:
+        if shutil.which("fc-cache"):
 			run_cmd(["fc-cache", "-fv"], show_output=False)
-		else:
-			console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
-	except Exception:
+    else:
+        console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
+    except Exception:
 		pass
-		console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
+	    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
 		time.sleep(1.5)
 
 		# 2. Welcome
