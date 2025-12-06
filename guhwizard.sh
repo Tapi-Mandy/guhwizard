@@ -317,9 +317,9 @@ def main():
     # Check if fc-cache exists before running, or catch the error
     try:
         if shutil.which("fc-cache"):
-			run_cmd(["fc-cache", "-fv"], show_output=False)
-    else:
-        console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
+            run_cmd(["fc-cache", "-fv"], show_output=False)
+        else:
+            console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
     except Exception:
 		pass
 	    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
