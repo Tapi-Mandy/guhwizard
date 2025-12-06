@@ -328,7 +328,7 @@ def main():
 		# 2. Welcome
 		print_header()
 		welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
-		console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
+        console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
 		
 		if not questionary.confirm("Ready to proceed?").ask():
 			sys.exit()
