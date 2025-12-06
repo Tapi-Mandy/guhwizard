@@ -322,16 +322,17 @@ def main():
             console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
     except Exception:
         pass
-	    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
-		time.sleep(1.5)
 
-		# 2. Welcome
-		print_header()
-		welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
-        console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
-		
-		if not questionary.confirm("Ready to proceed?").ask():
-			sys.exit()
+    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
+    time.sleep(1.5)
+
+    # 2. Welcome
+    print_header()
+    welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
+    console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
+    
+    if not questionary.confirm("Ready to proceed?").ask():
+        sys.exit()
 
     # 3. AUR Helper
     print_header()
@@ -690,14 +691,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nCancelled by user.")
         sys.exit(0)
-EOF
-
-# 5. Run
-if [ -f "installer.py" ]; then
-    python3 installer.py
-else
-    echo -e "${ROSE}[!] Error: installer.py was not created.${NC}"
-fi
-
-# 6. Cleanup
-rm -f installer.py
