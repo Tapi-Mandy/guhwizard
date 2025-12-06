@@ -321,7 +321,7 @@ def main():
         else:
             console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
     except Exception:
-		pass
+        pass
 	    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
 		time.sleep(1.5)
 
