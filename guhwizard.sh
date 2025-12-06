@@ -691,3 +691,14 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nCancelled by user.")
         sys.exit(0)
+EOF
+
+# 5. Run
+if [ -f "installer.py" ]; then
+    python3 installer.py
+else
+    echo -e "${ROSE}[!] Error: installer.py was not created.${NC}"
+fi
+
+# 6. Cleanup
+rm -f installer.py
