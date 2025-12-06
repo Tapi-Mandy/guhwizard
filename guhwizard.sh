@@ -315,23 +315,23 @@ def main():
     install_pacman_packages(base_pkgs, "Installing base packages...")
     
     # Check if fc-cache exists before running, or catch the error
-try:
-    if shutil.which("fc-cache"):
-        run_cmd(["fc-cache", "-fv"], show_output=False)
-    else:
-        console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
-except Exception:
-    pass
-    console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
-    time.sleep(1.5)
+	try:
+		if shutil.which("fc-cache"):
+			run_cmd(["fc-cache", "-fv"], show_output=False)
+		else:
+			console.print("[yellow]Warning: fc-cache not found, skipping font refresh.[/yellow]")
+	except Exception:
+		pass
+		console.print(Align.center(f"\n[{C_SUCCESS}]✔ Base packages installed.[/]"))
+		time.sleep(1.5)
 
-    # 2. Welcome
-    print_header()
-    welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
-    console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
-    
-    if not questionary.confirm("Ready to proceed?").ask():
-        sys.exit()
+		# 2. Welcome
+		print_header()
+		welcome_msg = "Welcome to the [bold magenta]guhwm[/bold magenta] installer.\n\nThis wizard will set up your environment,\ninstall applications, and configure the window manager.\n"
+		console.print(Panel(Align.center(welcome_msg), border_style=C_DARK, box=box.ROUNDED, title="Welcome", padding=(1, 4)))
+		
+		if not questionary.confirm("Ready to proceed?").ask():
+			sys.exit()
 
     # 3. AUR Helper
     print_header()
