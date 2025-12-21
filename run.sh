@@ -1,40 +1,46 @@
 #!/bin/bash
 set -e
 
-# GuhWizard Wrapper Script
+# GuhWizard Fresh Wrapper Script
 
 INSTALLER="./guhwizard"
 SUDOERS_FILE="/etc/sudoers.d/99-no-password-until-reboot"
 
-# Check if installer binary exists
-if [ ! -f "$INSTALLER" ]; then
-    echo "Building installer..."
-    go build -o guhwizard ./cmd/guhwizard
-fi
+echo "--- GuhWizard Fresh Orchestrator ---"
 
-echo "Welcome to the GuhWizard Installer Wrapper."
+# 1. Always rebuild to ensure we are running the latest code
+echo "Building the latest installer binary..."
+go build -o guhwizard ./cmd/guhwizard
+chmod +x guhwizard
 
-# 1. Check for sudoers persistence
+# 2. Check for sudoers persistence
 if [ ! -f "$SUDOERS_FILE" ]; then
-    echo "This installer requires temporary passwordless sudo access to run smoothly."
-    echo "We will now set up a temporary sudoers rule (valid until reboot)."
-    echo "You may be asked for your sudo password one last time."
+    echo
+    echo "[IMPORTANT] Root Setup Required"
+    echo "This installer will set up a temporary sudo rule (valid until reboot)"
+    echo "so you don't have to enter your password repeatedly during installation."
+    echo "This requires ONE-TIME sudo authentication now."
     echo
     
     # Run installer in root-setup mode
+    # We use -v to ensure we have a valid timestamp before running the command
+    sudo -v
     if sudo "$INSTALLER" --root-setup; then
-        echo "Root setup complete."
+        echo "Root setup complete. Passwordless mode active until reboot."
     else
-        echo "Root setup failed. Exiting."
+        echo "Root setup failed. You may not have sudo permissions or an error occurred."
         exit 1
     fi
 else
-    echo "Sudo persistence already configured. Proceeding..."
+    echo "Sudo persistence already configured ($SUDOERS_FILE). Proceeding..."
 fi
 
 echo
-echo "Launching Installer..."
-echo
+echo "Launching TUI Installer..."
+echo "---------------------------"
 
-# 2. Run the actual installer as USER (no sudo needed for launch, internal sudo calls will work)
+# 3. Run the actual installer
+# Since we just authenticated with 'sudo -v' and/or 'root-setup',
+# and we have 'timestamp_timeout=-1', the Go app will run without prompting.
 "$INSTALLER"
+
