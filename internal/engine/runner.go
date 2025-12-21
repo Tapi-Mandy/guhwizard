@@ -38,16 +38,7 @@ func (r *Runner) reportProgress(pct float64, step string) {
 	}
 }
 
-func (r *Runner) Install(password string) error {
-	r.reportProgress(0.0, "Authenticating...")
-
-	// 1. Start Sudo KeepAlive
-	if err := installer.CurrentSession.StartSudoKeepAlive(password); err != nil {
-		return fmt.Errorf("authentication failed: %v", err)
-	}
-	defer installer.CurrentSession.StopSudo()
-
-	// 2. Install AUR Helper
+func (r *Runner) Install() error {
 	r.reportProgress(0.1, fmt.Sprintf("Installing AUR Helper (%s)...", r.Config.Settings.AURHelper))
 	if err := installer.InstallAURHelper(r.Config, r.Log); err != nil {
 		return err

@@ -7,12 +7,10 @@ import (
 
 	"guhwizard/internal/config"
 	"guhwizard/internal/engine"
-	"guhwizard/internal/installer"
 	"guhwizard/internal/styles"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -23,7 +21,6 @@ const (
 	StateWelcome AppState = iota
 	StateSelection
 	StateConfirmation
-	StatePassword
 	StateInstalling
 	StateDone
 )
@@ -36,15 +33,13 @@ type Model struct {
 	cfg            *config.Config
 	currentStepIdx int
 	runner         *engine.Runner
-	password       string
 
 	// UI Components
-	width     int
-	height    int
-	textInput textinput.Model
-	list      list.Model
-	progress  progress.Model
-	viewport  viewport.Model
+	width    int
+	height   int
+	list     list.Model
+	progress progress.Model
+	viewport viewport.Model
 
 	// Data & Channels
 	logChannel  chan string
@@ -55,26 +50,18 @@ type Model struct {
 }
 
 func NewModel(cfg *config.Config) Model {
-	// 1. Setup Text Input (Password)
-	ti := textinput.New()
-	ti.Placeholder = "Sudo Password"
-	ti.EchoMode = textinput.EchoPassword
-	ti.CharLimit = 156
-	ti.Width = 30
-
-	// 2. Setup Progress Bar
+	// 1. Setup Progress Bar
 	prog := progress.New(progress.WithGradient("#f2cdcd", "#cba6f7"))
 
-	// 3. Setup Viewport (Logs)
+	// 2. Setup Viewport (Logs)
 	vp := viewport.New(0, 0)
 
-	// 4. Setup Channels & Engine
+	// 3. Setup Channels & Engine
 	logChan := make(chan string, 100)
 	progChan := make(chan engine.ProgressMsg, 100)
 	runner := engine.NewRunner(cfg, logChan, progChan)
 
-	// 5. Setup List with CUSTOM DELEGATE
-	// Ensure you created internal/ui/delegate.go for this to work!
+	// 4. Setup List with CUSTOM DELEGATE
 	l := list.New([]list.Item{}, CustomDelegate{}, 0, 0)
 	l.SetShowHelp(false)
 	l.Styles.Title = styles.Highlight
@@ -83,7 +70,6 @@ func NewModel(cfg *config.Config) Model {
 		state:       StateWelcome,
 		cfg:         cfg,
 		runner:      runner,
-		textInput:   ti,
 		progress:    prog,
 		viewport:    vp,
 		list:        l,
@@ -109,7 +95,7 @@ func waitForProgress(sub chan engine.ProgressMsg) tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -173,15 +159,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case StateSelection:
-		if m.currentStepIdx >= len(m.cfg.Steps) {
-			m.state = StateConfirmation
-			return m, nil
-		}
+		currStep := m.cfg.Steps[m.currentStepIdx]
 
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
 			case "enter":
+				// --- ENFORCE SELECTION FOR AUR HELPERS ---
+				if currStep.ID == "aur" {
+					hasSelection := false
+					for _, item := range currStep.Items {
+						if item.Selected {
+							hasSelection = true
+							m.cfg.Settings.AURHelper = item.Name
+							break
+						}
+					}
+					if !hasSelection {
+						return m, nil // Don't allow skipping AUR selection
+					}
+				}
+
 				m.currentStepIdx++
 				if m.currentStepIdx < len(m.cfg.Steps) {
 					m.loadCurrentStep()
@@ -193,6 +191,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.list.Items()) > 0 {
 					idx := m.list.Index()
 					itm := m.list.SelectedItem().(listItem)
+
+					// Single select logic
+					if currStep.Type == "single" {
+						// Unselect all others in BOTH the model list and the config
+						for i := range currStep.Items {
+							currStep.Items[i].Selected = false
+						}
+						// The display list model also needs its items updated
+						items := m.list.Items()
+						for i := range items {
+							li := items[i].(listItem)
+							li.configItem.Selected = false
+							m.list.SetItem(i, li)
+						}
+					}
+
 					itm.configItem.Selected = !itm.configItem.Selected
 					m.list.SetItem(idx, itm)
 				}
@@ -204,45 +218,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StateConfirmation:
 		if msg, ok := msg.(tea.KeyMsg); ok {
 			if msg.String() == "enter" {
-				m.state = StatePassword
-				m.textInput.Focus()
-				return m, nil
-			} else if msg.String() == "esc" {
-				// Backtrack could be added here
-			}
-		}
-
-	case StatePassword:
-		m.textInput, cmd = m.textInput.Update(msg)
-		if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "enter" {
-			m.password = m.textInput.Value()
-
-			// --- FIXED VALIDATION LOGIC ---
-			// We use StartSudoKeepAlive to check if the password is correct.
-			err := installer.CurrentSession.StartSudoKeepAlive(m.password)
-
-			if err != nil {
-				// Password Invalid
-				m.textInput.SetValue("")
-				m.textInput.Placeholder = "Incorrect. Try again."
-			} else {
-				// Password Valid!
-				// Stop the keepalive immediately, because runner.Install()
-				// will start its own fresh session.
-				installer.CurrentSession.StopSudo()
-
 				m.state = StateInstalling
 				return m, tea.Batch(
 					waitForLog(m.logChannel),
 					waitForProgress(m.progChannel),
 					func() tea.Msg {
-						err := m.runner.Install(m.password)
+						err := m.runner.Install()
 						return installMsg{err: err}
 					},
 				)
+			} else if msg.String() == "esc" {
+				m.state = StateSelection
+				m.currentStepIdx = len(m.cfg.Steps) - 1
+				m.loadCurrentStep()
+				return m, nil
 			}
 		}
-		return m, cmd
 
 	case StateInstalling:
 		if msg, ok := msg.(tea.KeyMsg); ok && (msg.String() == "v" || msg.String() == "V") {
@@ -287,18 +278,10 @@ func (i listItem) Title() string {
 	// Prettify: replace dashes with spaces
 	displayName = strings.ReplaceAll(displayName, "-", " ")
 
-	// Basic cleanup: remove common version suffixes manually or via logic
-	// e.g. "sublime text 4" -> "sublime text" (if desired strictly)
-	// For now, replacing dashes is the main request + removing strict version numbers if easy.
-	// Let's trim trailing digits if separated by space?
-	// User example: "sublime-text-4" -> "sublime text".
-
 	// Simple heuristic: Remove trailing numbers
 	displayWords := strings.Fields(displayName)
 	if len(displayWords) > 1 {
 		lastWord := displayWords[len(displayWords)-1]
-		// If last word is a single digit or "bin", remove it?
-		// "bin" is common in AUR.
 		if lastWord == "bin" || (len(lastWord) == 1 && lastWord >= "0" && lastWord <= "9") {
 			displayName = strings.Join(displayWords[:len(displayWords)-1], " ")
 		}

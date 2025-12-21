@@ -1,6 +1,6 @@
 # FILE: install_config.yaml
 settings:
-  aur_helper: "yay" # Fallback default
+  aur_helper: "" # Defined by user selection in Step 0
   
   # CORE SYSTEM DEPENDENCIES (Will be installed automatically)
   base_packages:

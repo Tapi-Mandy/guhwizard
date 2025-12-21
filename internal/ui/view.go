@@ -69,15 +69,6 @@ func (m Model) View() string {
 			summary,
 		)
 
-	case StatePassword:
-		content = lipgloss.JoinVertical(lipgloss.Center,
-			header,
-			"Configuration Complete.",
-			"Authentication required to proceed with installation.",
-			"\n",
-			m.textInput.View(),
-		)
-
 	case StateInstalling:
 		var mainArea string
 		if m.showLogs {
