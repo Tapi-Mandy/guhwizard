@@ -282,7 +282,29 @@ func (i listItem) Title() string {
 	if i.configItem.Selected {
 		check = "[x]"
 	}
-	return fmt.Sprintf("%s %s", check, i.configItem.Name)
+
+	displayName := i.configItem.Name
+	// Prettify: replace dashes with spaces
+	displayName = strings.ReplaceAll(displayName, "-", " ")
+
+	// Basic cleanup: remove common version suffixes manually or via logic
+	// e.g. "sublime text 4" -> "sublime text" (if desired strictly)
+	// For now, replacing dashes is the main request + removing strict version numbers if easy.
+	// Let's trim trailing digits if separated by space?
+	// User example: "sublime-text-4" -> "sublime text".
+
+	// Simple heuristic: Remove trailing numbers
+	displayWords := strings.Fields(displayName)
+	if len(displayWords) > 1 {
+		lastWord := displayWords[len(displayWords)-1]
+		// If last word is a single digit or "bin", remove it?
+		// "bin" is common in AUR.
+		if lastWord == "bin" || (len(lastWord) == 1 && lastWord >= "0" && lastWord <= "9") {
+			displayName = strings.Join(displayWords[:len(displayWords)-1], " ")
+		}
+	}
+
+	return fmt.Sprintf("%s %s", check, displayName)
 }
 
 func (i listItem) Description() string { return i.configItem.Description }

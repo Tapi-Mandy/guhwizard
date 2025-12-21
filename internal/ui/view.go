@@ -20,7 +20,12 @@ func (m Model) View() string {
 		)
 
 	case StateSelection:
-		footerText := "[Space] Toggle  [Enter] Next Step"
+		// Requested text: "Press space to select, Enter to skip this step"
+		// Logic suggests "skip" is relevant if nothing is selected, but user asked for this as general instruction.
+		// However, "Enter to skip" implies moving next without selection.
+		// "Next Step" is more accurate if items ARE selected.
+		// But I will stick to the requested text format or make it dynamic.
+
 		hasSelection := false
 		for _, itm := range m.list.Items() {
 			if itm.(listItem).configItem.Selected {
@@ -28,8 +33,12 @@ func (m Model) View() string {
 				break
 			}
 		}
-		if !hasSelection {
-			footerText = "[Enter] Skip this step"
+
+		var footerText string
+		if hasSelection {
+			footerText = "Press [Space] to select, [Enter] for Next Step"
+		} else {
+			footerText = "Press [Space] to select, [Enter] to skip this step"
 		}
 
 		content = lipgloss.JoinVertical(lipgloss.Left,
