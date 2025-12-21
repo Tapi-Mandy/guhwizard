@@ -1,0 +1,175 @@
+# FILE: install_config.yaml
+settings:
+  aur_helper: "yay" # Fallback default
+  
+  # CORE SYSTEM DEPENDENCIES (Will be installed automatically)
+  base_packages:
+    # Core System & Graphics
+    - "glibc"
+    - "wayland"
+    - "wayland-protocols"
+    - "libinput"
+    - "libxkbcommon"
+    - "libdrm"
+    - "pixman"
+    - "libdisplay-info"
+    - "libliftoff"
+    - "seatd"
+    - "hwdata"
+    - "gammastep"
+    # Development
+    - "git"
+    - "meson"
+    - "ninja"
+    # Compatibility & Utils
+    - "xorg-xwayland"
+    - "xdg-desktop-portal"
+    - "libxcb"
+    - "pcre2"
+    - "jq"
+    - "zip"
+    - "unzip"
+    - "wl-clipboard"
+    # Notifications
+    - "swaync"
+    - "libnotify"
+    # Audio
+    - "alsa-utils"
+    - "pipewire"
+    - "pipewire-pulse"
+    - "wireplumber"
+    # Fonts
+    - "noto-fonts"
+    - "noto-fonts-cjk"
+    - "noto-fonts-emoji"
+    - "ttf-jetbrains-mono-nerd"
+    # Window Manager & Launcher
+    - "mangowc-git"
+    - "rofi"
+    - "clipse"
+    - "clipse-gui"
+
+  # External installation scripts
+  external_scripts:
+    - name: "guhShot"
+      command: "curl -s https://raw.githubusercontent.com/Tapi-Mandy/guhShot/main/install.sh | bash"
+    - name: "guhwall"
+      command: "curl -fsSL https://raw.githubusercontent.com/Tapi-Mandy/guhwall/main/install.sh | bash"
+
+  dotfiles:
+    repo: "https://github.com/Tapi-Mandy/guhwm"
+    target_dir: "~/.config"
+    items:
+      - src: "mango/configs"
+        dest: "~/.config"
+      - src: "Wallpapers"
+        dest: "~/Wallpapers"
+
+steps:
+  # STEP 0: AUR Helper Selection
+  - id: "aur"
+    title: "Select AUR Helper"
+    type: "single"
+    items:
+      - name: "yay"
+        desc: "Recommended: Yet Another Yogurt"
+      - name: "paru"
+        desc: "Feature packed AUR helper (Rust)"
+
+  # STEP 1: Browsers
+  - id: "browsers"
+    title: "Select Browsers"
+    type: "multi"
+    items:
+      - name: "brave-bin"
+        desc: "Privacy-focused browser"
+      - name: "firefox"
+        desc: "Fast, Private & Safe"
+      - name: "floorp-bin"
+        desc: "Firefox fork focused on performance"
+      - name: "librewolf-bin"
+        desc: "Fork of Firefox focused on privacy"
+      - name: "lynx"
+        desc: "Text-based web browser"
+
+  # STEP 2: Terminals (Selection patches config.conf)
+  - id: "terminals"
+    title: "Select Terminal"
+    type: "single"
+    items:
+      - name: "alacritty"
+        desc: "Fast, cross-platform, OpenGL terminal"
+      - name: "foot"
+        desc: "Fast, lightweight Wayland terminal"
+      - name: "kitty"
+        desc: "Modern, hackable, featureful, OpenGL terminal"
+
+  # STEP 3: Communication
+  - id: "communication"
+    title: "Communication Tools"
+    type: "multi"
+    items:
+      - name: "ayugram-desktop-bin"
+        desc: "Telegram client with good customization"
+      - name: "discord"
+        desc: "All-in-one voice and text chat"
+      - name: "dissent-bin"
+        desc: "Discord client written in Go/GTK4"
+      - name: "telegram-desktop"
+        desc: "Official Telegram Desktop client"
+      - name: "vesktop-bin"
+        desc: "The cutest Discord client"
+      - name: "webcord-bin"
+        desc: "Discord client using web version"
+
+  # STEP 4: Development
+  - id: "dev"
+    title: "Development Tools"
+    type: "multi"
+    items:
+      - name: "neovim"
+        desc: "Vim-fork focused on extensibility"
+      - name: "vscodium-bin"
+        desc: "Free/Libre Open Source VSCode binary"
+      - name: "geany"
+        desc: "Flyweight IDE"
+      - name: "sublime-text-4"
+        desc: "Sophisticated text editor"
+
+  # STEP 5: Miscellaneous
+  - id: "misc"
+    title: "Miscellaneous"
+    type: "multi"
+    items:
+      - name: "htop"
+        desc: "Interactive process viewer"
+      - name: "mpv"
+        desc: "Cross-platform media player"
+      - name: "krita"
+        desc: "Digital painting studio"
+      - name: "uwufetch"
+        desc: "Cute system info fetcher"
+      - name: "yazi"
+        desc: "Blazing fast terminal file manager"
+
+  # STEP 6: Shell
+  - id: "shell"
+    title: "Shell Setup"
+    type: "single"
+    items:
+      - name: "zsh"
+        desc: "Highly customizable shell"
+      - name: "fish"
+        desc: "Friendly Interactive Shell"
+      - name: "bash"
+        desc: "GNU Bourne Again Shell"
+
+  # STEP 7: Display Manager
+  - id: "dm"
+    title: "Display Manager"
+    type: "single"
+    items:
+      - name: "sddm"
+        desc: "QML based X11 and Wayland display manager"
+      - name: "None"
+        desc: "Do not install a Display Manager"
